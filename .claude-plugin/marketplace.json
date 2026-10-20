@@ -36,7 +36,7 @@
     {
       "name": "autopilot",
       "source": "./plugins/autopilot",
-      "description": "Drives a Claude Code session toward a goal on its own: rewrites the prompts you type, decides permission asks and questions from the whole conversation, and sends the next instruction after each turn until the goal is done.",
+      "description": "Drives your Claude Code sessions on its own: rewrites the prompts you type, decides permission asks and questions from the whole conversation, and after each turn sends the practical next step (fix, verify, commit, push, open the PR) until only you can decide what is left.",
       "category": "productivity",
       "tags": [
         "mods",

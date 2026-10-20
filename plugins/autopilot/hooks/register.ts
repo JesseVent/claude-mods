@@ -6,7 +6,7 @@ import type { Pilot } from '../types'
 type Engine = EngineInterface
 type Verdict = { decision: 'allow' | 'deny' | 'ask'; reason: string }
 
-const pilot = atom({ plugin: 'autopilot', key: 'pilot' } as const, { on: false, goal: '', turns: 0 } as Pilot)
+const pilot = atom({ plugin: 'autopilot', key: 'pilot' } as const, { on: false, goal: '', turns: 0, driving: false } as Pilot)
 
 /** Origins that are the person typing; everything else (autopilot's own prompts included) is left as sent. */
 const HUMAN = new Set(['composer', 'bridge'])
@@ -15,7 +15,7 @@ const POLICY =
   'Never allow: pushing to main or master, force-pushing, deleting data outside the repository, creating or rotating credentials, anything that spends money, anything irreversible outside the working directory. Allow what the goal needs inside the working directory.'
 
 const REWRITE =
-  "You rewrite a developer's prompt to a coding agent (Claude Code) so the agent can carry it out start to finish without asking anything. Keep every requirement and the developer's wording where it is already clear, settle ambiguity with the most reasonable reading, and end with how to prove it is done (what to run or check). Never add scope. Reply with the rewritten prompt alone."
+  "You rewrite a developer's prompt to a coding agent (Claude Code) so the agent can carry it out start to finish without asking anything. Keep every requirement and the developer's wording where it is already clear, settle ambiguity with the most reasonable reading, and, for a task, end with how to prove it is done (what to run or check); a question stays a question. Never add scope. Reply with the rewritten prompt alone."
 
 /** Session text as the decider reads it: no closing tag inside can end the data early. */
 const fence = (s: string) => s.replace(/<\//g, '<\\/')
@@ -31,7 +31,15 @@ const ANSWER = (goal: string, question: string) =>
   `[autopilot] Step out of the agent's role: you are its operator, reading the conversation above, and the agent just asked you this. The goal: ${goal}\n\nQuestion: ${question}\n\nAnswer from what the conversation shows, picking what best serves the goal. Reply with the answer alone in one or two sentences: the option you pick and why.`
 
 const NEXT = (goal: string) =>
-  `[autopilot] Step out of the agent's role: you are now its operator, reading the conversation above. The goal: ${goal}\n\nIf the goal is fully done and verified, reply DONE: <one-line summary>. Otherwise reply with the operator's next message to the agent: one concrete instruction, or the answer to any question the agent asked, picking what best serves the goal. ${POLICY} Reply with that message alone.`
+  `[autopilot] Step out of the agent's role: you are now its operator, the person who owns the outcome, reading the conversation above so they don't have to read, copy, paste and type. The goal: ${goal}
+
+Work out what practically needs to happen next, and reply with the one message that makes the agent do it:
+- First, loose ends from the last turn: anything unfinished, failing, unverified or flagged (an error, a TODO, a "next step", a question it asked or an option it offered: answer those with the best choice).
+- Then verify the work (run it, test it, check the output) and land it the way this repository expects: commit on a branch, push the branch, open a pull request, never main.
+- Then the follow-ups the goal clearly implies (docs, callers, stale copies). Never add scope the goal does not imply.
+Put the exact command, path or error text from the conversation into the message, so the agent never has to look it up again.
+
+Reply DONE: <one-line summary> only when nothing practical is left that you would do without the person: what remains needs their decision, their credentials, money, a merge to main, or is outside the goal. Say in the summary what is waiting on them. A goal that only asked a question is done once it is answered. ${POLICY} Reply with that message alone.`
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
@@ -47,7 +55,7 @@ export function verdict(text: string): Verdict | undefined {
 type Status = { id: string; goal: string; turns: number; status: string; cwd: string; updatedAt: string }
 
 /** The options, read once per load: `register` runs again when they change. */
-const cfg = { model: 'sonnet', maxTurns: 25, autoEngage: false }
+const cfg = { model: 'sonnet', maxTurns: 25, autoEngage: true }
 
 /** The session's git branch, looked up live so neither the push guard nor the decider guesses it; '' off a branch. */
 async function branch($: Engine) {
@@ -73,14 +81,16 @@ async function record($: Engine, p: Pilot, status: string) {
   }
 }
 
-async function set($: Engine, p: Pilot, status = p.on ? 'driving' : 'off') {
+async function set($: Engine, p: Pilot, status = !p.on ? 'off' : p.driving ? 'driving' : 'ready') {
   await update($, pilot, () => p)
-  $.ui.status(p.on ? `autopilot ${p.turns}/${cfg.maxTurns}${p.goal ? ` · ${clip(p.goal.replace(/\s+/g, ' '), 40)}` : ''}` : undefined)
+  // The engine heads the entry with the plugin's name.
+  $.ui.status(!p.on ? undefined : p.driving ? `${p.turns}/${cfg.maxTurns} · ${clip(p.goal.replace(/\s+/g, ' '), 40)}` : 'ready')
   await record($, p, status)
 }
 
+/** Stops driving this goal and stays armed: the next prompt typed drives again, and `/drive on` resumes this one. */
 async function stop($: Engine, p: Pilot, why: string) {
-  await set($, { ...p, on: false }, why)
+  await set($, { ...p, driving: false }, why)
   $.ui.log(why)
   void $.ui.notify(why, { title: 'autopilot' }).catch(() => undefined)
 }
@@ -130,7 +140,7 @@ async function list($: Engine) {
 export const register: Register = (on, options) => {
   cfg.model = String(options.model ?? '') || 'sonnet'
   cfg.maxTurns = Number(options.maxTurns) > 0 ? Number(options.maxTurns) : 25
-  cfg.autoEngage = options.autoEngage === true
+  cfg.autoEngage = options.autoEngage !== false
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -139,7 +149,7 @@ export const register: Register = (on, options) => {
       argumentHint: '[<goal> | on | off]',
     })
     const p = await read($, pilot)
-    if (cfg.autoEngage && !p.on) await set($, { on: true, goal: '', turns: 0 })
+    if (cfg.autoEngage && !p.on) await set($, { on: true, goal: '', turns: 0, driving: false })
     else if (p.on) await set($, p)
     return next(e)
   })
@@ -148,8 +158,8 @@ export const register: Register = (on, options) => {
     const p = await read($, pilot)
     if (!p.on || e.command || e.isMeta || !HUMAN.has(e.origin.kind)) return next(e)
     const text = await rewrite($, e.text)
-    // Typed over a running turn it steers the goal; typed at an idle prompt it replaces it.
-    await set($, e.turnId ? { ...p, goal: `${p.goal}\n\nThen: ${text}` } : { on: true, goal: text, turns: 0 })
+    // Typed over a goal being driven it steers that goal; otherwise it is the new goal.
+    await set($, e.turnId && p.driving && p.goal ? { ...p, goal: `${p.goal}\n\nThen: ${text}` } : { on: true, goal: text, turns: 0, driving: true })
     return next({ ...e, text })
   }).catch(($, e, next) => next(e))
 
@@ -191,7 +201,7 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (e.agentId !== undefined) return r
     const p = await read($, pilot)
-    if (!p.on || !p.goal) return r
+    if (!p.on || !p.driving || !p.goal) return r
     const halt =
       e.reason === 'aborted'
         ? 'paused: you interrupted it. /drive on resumes'
@@ -216,8 +226,9 @@ export const register: Register = (on, options) => {
       await stop($, p, end)
       return r
     }
-    // Turned off while it was thinking.
-    if (!(await read($, pilot)).on) return r
+    // Turned off, or handed a new goal, while it was thinking.
+    const now = await read($, pilot)
+    if (!now.on || !now.driving || now.goal !== p.goal) return r
 
     await set($, { ...p, turns: p.turns + 1 })
     $.ui.log(`→ ${clip(text.replace(/\s+/g, ' '), 200)}`)
@@ -230,17 +241,17 @@ export const register: Register = (on, options) => {
     const p = await read($, pilot)
     if (!arg) return { text: await list($) }
     if (arg === 'off') {
-      await set($, { ...p, on: false })
-      return { text: 'Autopilot off.' }
+      await set($, { ...p, on: false, driving: false })
+      return { text: 'Autopilot off for this session.' }
     }
     if (arg === 'on') {
-      await set($, { ...p, on: true, turns: 0 })
+      await set($, { ...p, on: true, turns: 0, driving: !!p.goal })
       if (!p.goal) return { text: 'Autopilot on: the next prompt you type is its goal.' }
       later($, `Carry on toward the goal: ${p.goal}`)
       return { text: `Autopilot on, resuming: ${clip(p.goal, 200)}` }
     }
     const goal = await rewrite($, arg)
-    await set($, { on: true, goal, turns: 0 })
+    await set($, { on: true, goal, turns: 0, driving: true })
     later($, goal)
     return { text: 'Autopilot on.' }
   })

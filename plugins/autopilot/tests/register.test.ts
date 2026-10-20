@@ -35,13 +35,17 @@ function world(on: On, o: WorldOptions = {}) {
   on('ui.notify', () => ({ value: { isSent: true as const, channel: 'terminal_bell' as const } }))
   on('tool.check', () => ({ decision: o.engine ?? 'ask', reason: 'no rule allows it' }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
   return w
 }
 
+const start = ($: { session: { start: unknown } }) => ($.session.start as (e: unknown) => Promise<unknown>)({ cwd: '/work/app', surface: null, isInteractive: true })
+const row = (w: { files: Map<string, string> }) => JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!) as { goal: string; status: string; turns: number }
+
 const drive = ($: { command: { run: unknown } }, args: string) =>
   ($.command.run as (a: unknown) => Promise<{ text: string }>)({ command: 'drive', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } }).then(r => r.text)
-const type = ($: { prompt: { submit: unknown } }, text: string, kind = 'composer') =>
-  ($.prompt.submit as (e: unknown) => Promise<{ text: string }>)({ text, wait: false, origin: { kind } }).then(r => r.text)
+const type = ($: { prompt: { submit: unknown } }, text: string, kind = 'composer', turnId?: string) =>
+  ($.prompt.submit as (e: unknown) => Promise<{ text: string }>)({ text, wait: false, origin: { kind }, turnId }).then(r => r.text)
 const check = ($: { tool: { check: unknown } }, tool: string, input: unknown) =>
   ($.tool.check as (e: unknown) => Promise<Check>)({ tool, input, tool_use_id: 'u1' })
 const ended = ($: { turn: { complete: unknown } }, reason: 'answer' | 'aborted' | 'error' = 'answer') =>
@@ -59,8 +63,9 @@ describe('engaging', () => {
     expect(row).toMatchObject({ goal: 'rewritten: add tests', status: 'driving' })
   })
 
-  test('typed prompts are rewritten only while driving, and its own prompts never', async ($, on) => {
+  test('with autoEngage off, typed prompts are rewritten only after /drive, and its own prompts never', { options: { autoEngage: false } }, async ($, on) => {
     const w = world(on)
+    await start($)
     expect(await type($, 'hello')).toBe('hello')
     await drive($, 'add tests')
     expect(await type($, 'then lint')).toBe('rewritten: then lint')
@@ -74,6 +79,63 @@ describe('engaging', () => {
     await drive($, 'off')
     expect((await check($, 'Bash', { command: 'rm -rf build' })).decision).toBe('ask')
     expect(w.forks).toEqual([])
+  })
+})
+
+describe('on by default', () => {
+  test('a typed prompt is rewritten and driven with no /drive', async ($, on) => {
+    const w = world(on, { fork: () => 'Commit notes.txt on feat/tides.' })
+    await start($)
+    expect(await type($, 'add a line')).toBe('rewritten: add a line')
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted).toEqual(['rewritten: add a line', 'Commit notes.txt on feat/tides.'])
+    expect(row(w)).toMatchObject({ goal: 'rewritten: add a line', turns: 1, status: 'driving' })
+  })
+
+  test('after DONE it stays armed, and the next prompt drives again', async ($, on) => {
+    let reply = 'DONE: line added and committed; the push waits on you'
+    const w = world(on, { fork: () => reply })
+    await start($)
+    await type($, 'add a line')
+    await ended($)
+    expect(row(w).status).toBe('done: line added and committed; the push waits on you')
+    await ended($)
+    expect(w.forks).toHaveLength(1)
+    reply = 'Run bun test.'
+    expect(await type($, 'now lint')).toBe('rewritten: now lint')
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted.at(-1)).toBe('Run bun test.')
+  })
+
+  test('/drive off sticks for the session', async ($, on) => {
+    const w = world(on, { fork: () => 'Keep going.' })
+    await start($)
+    await drive($, 'off')
+    expect(await type($, 'add a line')).toBe('add a line')
+    await ended($)
+    expect(w.forks).toEqual([])
+    expect(row(w).status).toBe('off')
+  })
+
+  test('after Esc, a typed prompt drives the new goal', async ($, on) => {
+    const w = world(on, { fork: () => 'Keep going.' })
+    await start($)
+    await type($, 'add a line')
+    await ended($, 'aborted')
+    await type($, 'do it differently')
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted.at(-1)).toBe('Keep going.')
+    expect(row(w).goal).toBe('rewritten: do it differently')
+  })
+
+  test('a prompt typed mid-turn with no goal becomes the goal', async ($, on) => {
+    const w = world(on)
+    await start($)
+    await type($, 'add a line', 'composer', 't0')
+    expect(row(w).goal).toBe('rewritten: add a line')
   })
 })
 

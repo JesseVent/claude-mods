@@ -1,7 +1,7 @@
 {
   "name": "autopilot",
   "version": "0.1.0",
-  "description": "Drives a Claude Code session toward a goal on its own: rewrites the prompts you type, decides permission asks and questions from the whole conversation, and sends the next instruction after each turn until the goal is done.",
+  "description": "Drives your Claude Code sessions on its own: rewrites the prompts you type, decides permission asks and questions from the whole conversation, and after each turn sends the practical next step (fix, verify, commit, push, open the PR) until only you can decide what is left.",
   "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
   "repository": "https://github.com/JesseVent/claude-mods",
   "license": "MIT",
@@ -22,9 +22,9 @@
     },
     "autoEngage": {
       "type": "boolean",
-      "title": "Engage in every session",
-      "description": "Start every session with autopilot on, so the first prompt you type becomes its goal. Off: engage per session with /autopilot.",
-      "default": false
+      "title": "On in every session",
+      "description": "On (default): every prompt you type becomes the goal and the session drives itself, deciding permission asks for you. Off: engage per session with /drive.",
+      "default": true
     }
   }
 }
