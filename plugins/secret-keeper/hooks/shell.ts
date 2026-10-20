@@ -1,16 +1,14 @@
-// How a Bash command gets the secrets: exported as env vars ahead of it, so the command itself only names them.
+// How a Bash command gets the secrets: through the environment, never its text. Hooks beneath a mod and the
+// permission check see the command as rewritten, and a hook may log it; the text only names slot variables.
 
 export const TOKEN = /\[(secret:[A-Z_][A-Z0-9_]*|pii:[A-Z_]+#\d+)\]/g
 
-/** Single-quoted for the shell: nothing inside expands, a quote is closed, escaped and reopened. */
-export const quote = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`
+/** How many secrets one command can get: `$.env.set` takes literal names, so the slots are spelled out. */
+export const SLOTS = 16
 
-/** `export A='…' B='…'; <command>`, or the command untouched when there is nothing to export. */
-export function withEnv(command: string, env: Readonly<Record<string, string>>): string {
-  const pairs = Object.entries(env)
-  if (pairs.length === 0) return command
-  return `export ${pairs.map(([k, v]) => `${k}=${quote(v)}`).join(' ')}; ${command}`
-}
+/** `export A="$SECRET_KEEPER_1" B="$SECRET_KEEPER_2"; `: plain exports of references, which permission rules accept. */
+export const prefixFor = (names: readonly string[]) =>
+  names.length ? `export ${names.map((n, i) => `${n}="$SECRET_KEEPER_${i + 1}"`).join(' ')}; ` : ''
 
 /**
  * `[secret:NAME]` written into a command becomes `"${NAME}"`.

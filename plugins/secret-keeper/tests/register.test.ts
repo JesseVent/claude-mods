@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { fromHex, SERVICE, toHex } from '../hooks/keychain'
-import { quote, refsToVars, withEnv } from '../hooks/shell'
+import { prefixFor, refsToVars } from '../hooks/shell'
 import { chars, ALNUM, join, PROVIDER_FAKES } from './fakes'
 
 const submit = ($: { prompt: { submit: unknown } }, text: string) => ($.prompt.submit as (e: { text: string }) => Promise<{ text: string }>)({ text })
@@ -13,12 +13,24 @@ const ROOT = '/work/app'
 const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
 const fail = () => ({ value: { exitCode: 44, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
 
-/** The world beneath the mod: a git repo at ROOT, a Keychain in memory, tools that echo what they got. */
-function world(on: On, store: Record<string, unknown> = {}, items = new Map<string, string>()) {
+/**
+ * The world beneath the mod: a git repo at ROOT, a Keychain in memory, a process environment, tools that echo
+ * what they got. `during` is what slot 1 (SECRET_KEEPER_1) held while each Bash call ran.
+ */
+function world(on: On, store: Record<string, unknown> = {}, items = new Map<string, string>(), opts: { refuseEnv?: boolean; gate?: Promise<void> } = {}) {
   const argvs: string[][] = []
   const ran: string[] = []
+  const during: string[] = []
   const written: string[] = []
+  const env = new Map<string, string>()
+  const envs: Array<Record<string, string>> = []
   mock.store(on, store)
+  on('env.set', ($, e) => {
+    if (opts.refuseEnv) return { deny: 'held by policy' }
+    if (e.value === undefined) env.delete(e.name)
+    else env.set(e.name, e.value)
+    return { value: {} }
+  })
   on('session.cwd', () => ({ value: `${ROOT}/src` }))
   on('process.run', ($, e) => {
     argvs.push([...e.argv])
@@ -40,10 +52,18 @@ function world(on: On, store: Record<string, unknown> = {}, items = new Map<stri
   on('prompt.section', ($, e) => ({ text: e.text }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('tool.call', { tool: 'Bash' }, ($, e) => (ran.push(e.command), { result: { stdout: 'ok', stderr: '', interrupted: false } }))
+  on('ui.log', () => ({ value: undefined }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('tool.call', { tool: 'Bash' }, async ($, e) => {
+    ran.push(e.command)
+    during.push(env.get('SECRET_KEEPER_1') ?? '')
+    envs.push(Object.fromEntries(env))
+    if (e.command.endsWith('slow')) await opts.gate
+    return { result: { stdout: 'ok', stderr: '', interrupted: false } }
+  })
   on('tool.call', { tool: 'Write' }, ($, e) => (written.push(e.content), { result: { type: 'create', filePath: e.file_path, content: e.content, structuredPatch: [] } }))
   on('tool.call', { tool: 'Edit' }, ($, e) => (written.push(`${e.old_string}=>${e.new_string}`), { result: { filePath: e.file_path, oldString: e.old_string, newString: e.new_string, originalFile: '', structuredPatch: [], userModified: false, replaceAll: false } }))
-  return { argvs, ran, written, items }
+  return { argvs, ran, during, envs, written, items, env }
 }
 
 const append = ($: { session: { append: unknown } }, text: string) =>
@@ -65,7 +85,52 @@ describe('pasting', () => {
     expect([...w.items.values()].map(fromHex)).toEqual([key])
 
     await call($, { tool: 'Bash', command: 'bun run tts.ts' })
-    expect(w.ran).toEqual([`export ELEVENLABS_API_KEY=${quote(key)}; bun run tts.ts`])
+    expect(w.ran).toEqual([`${prefixFor(['ELEVENLABS_API_KEY'])}bun run tts.ts`])
+    expect(w.during).toEqual([key])
+    expect(w.env.size).toBe(0)
+  })
+
+  test('the value never enters the command text, which hooks beneath see and may log', async ($, on) => {
+    const w = world(on)
+    const key = PROVIDER_FAKES.openai!()
+    await submit($, `OPENAI_API_KEY=${key}`)
+    await call($, { tool: 'Bash', command: 'curl -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/models' })
+    await call($, { tool: 'Bash', command: 'echo [secret:OPENAI_API_KEY]' })
+    expect(w.ran.join('\n')).not.toContain(key)
+    expect(w.ran[1]).toBe(`${prefixFor(['OPENAI_API_KEY'])}echo "\${OPENAI_API_KEY}"`)
+  })
+
+  test('the variable stays set until the last of two overlapping calls ends', async ($, on) => {
+    let release = () => {}
+    const gate = new Promise<void>(r => (release = r))
+    const w = world(on, {}, undefined, { gate })
+    await submit($, `GROQ_API_KEY=${PROVIDER_FAKES.groq!()}`)
+    const slow = call($, { tool: 'Bash', command: 'sleep 1 && slow' })
+    await call($, { tool: 'Bash', command: 'true' })
+    expect(w.env.has('SECRET_KEEPER_1')).toBe(true)
+    release()
+    await slow
+    expect(w.env.size).toBe(0)
+    expect(w.during.every(d => d.startsWith('gsk_'))).toBe(true)
+  })
+
+  test('several secrets go in slots by name order, each slot holding its own value', async ($, on) => {
+    const w = world(on)
+    const [gh, npm] = [PROVIDER_FAKES.github!(), PROVIDER_FAKES.npm!()]
+    await submit($, `NPM_TOKEN=${npm} and GITHUB_TOKEN=${gh}`)
+    await call($, { tool: 'Bash', command: 'make release' })
+    expect(w.envs).toEqual([{ SECRET_KEEPER_1: gh, SECRET_KEEPER_2: npm }])
+    expect(w.ran).toEqual([`${prefixFor(['GITHUB_TOKEN', 'NPM_TOKEN'])}make release`])
+    expect(w.env.size).toBe(0)
+  })
+
+  test('a refused environment write leaves the command as written: never values inline', async ($, on) => {
+    const w = world(on, {}, undefined, { refuseEnv: true })
+    const key = PROVIDER_FAKES.npm!()
+    await submit($, `NPM_TOKEN=${key}`)
+    await call($, { tool: 'Bash', command: 'npm whoami' })
+    await call($, { tool: 'Bash', command: 'npm whoami' })
+    expect(w.ran).toEqual(['npm whoami', 'npm whoami'])
   })
 
   test('the note says pasting is expected and lists what Bash has', async ($, on) => {
@@ -91,7 +156,8 @@ describe('pasting', () => {
     await submit($, PROVIDER_FAKES.groq!())
     expect(w.argvs.filter(a => a[0] === 'security')).toEqual([])
     await call($, { tool: 'Bash', command: 'env' })
-    expect(w.ran[0]).toMatch(/^export GROQ_API_KEY='gsk_/)
+    expect(w.ran[0]).toBe(`${prefixFor(['GROQ_API_KEY'])}env`)
+    expect(w.during[0]).toMatch(/^gsk_/)
   })
 })
 
@@ -117,7 +183,8 @@ describe('later sessions', () => {
       items,
     )
     await call($, { tool: 'Bash', command: 'gh auth status' })
-    expect(w.ran).toEqual([`export GITHUB_TOKEN=${quote(local)}; gh auth status`])
+    expect(w.ran).toEqual([`${prefixFor(['GITHUB_TOKEN'])}gh auth status`])
+    expect(w.during).toEqual([local])
     expect(await secrets($)).toBe(['Stored in the Keychain:', '  GITHUB_TOKEN  this project  2026-10-20', '  GITHUB_TOKEN  global  2026-10-01', '1 more stored for other projects.'].join('\n'))
   })
 
@@ -197,18 +264,17 @@ describe('tools', () => {
     const key = PROVIDER_FAKES.huggingface!()
     await submit($, `HF_TOKEN=${key}`)
     await call($, { tool: 'Bash', command: 'echo [secret:HF_TOKEN] | wc -c' })
-    expect(w.ran).toEqual([`export HF_TOKEN=${quote(key)}; echo "\${HF_TOKEN}" | wc -c`])
+    expect(w.ran).toEqual([`${prefixFor(['HF_TOKEN'])}echo "\${HF_TOKEN}" | wc -c`])
+    expect(w.during).toEqual([key])
     const r = await call($, { tool: 'Bash', command: `security find-generic-password -s ${SERVICE} -w` })
     expect(r.deny).toMatch(/read by secret-keeper alone/)
   })
 })
 
 describe('shell helpers', () => {
-  test('quoting survives quotes, dollars, backslashes and newlines', () => {
-    expect(quote(`a'b`)).toBe(`'a'\\''b'`)
-    expect(quote('$HOME `x` \\n\nend')).toBe("'$HOME `x` \\n\nend'")
-    expect(withEnv('ls', {})).toBe('ls')
-    expect(withEnv('ls', { A: 'x', B: "y'z" })).toBe(`export A='x' B='y'\\''z'; ls`)
+  test('the prefix names slots, never values', () => {
+    expect(prefixFor([])).toBe('')
+    expect(prefixFor(['A', 'B'])).toBe('export A="$SECRET_KEEPER_1" B="$SECRET_KEEPER_2"; ')
     expect(refsToVars('a [secret:X_1] b')).toBe('a "${X_1}" b')
   })
 

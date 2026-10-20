@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { StoredEntry } from '../types'
 import { find, type FindOptions, type Hit } from './detect'
 import * as keychain from './keychain'
-import { refsToVars, TOKEN, tokensIn, withEnv } from './shell'
+import { prefixFor, refsToVars, SLOTS, TOKEN, tokensIn } from './shell'
 
 /** Placeholder key (`secret:NAME`, `pii:EMAIL#1`) → the real value, for this session. */
 const vault = atom({ plugin: 'secret-keeper', key: 'vault' } as const, {} as Record<string, string>)
@@ -19,6 +19,51 @@ type Block = { type: string; [field: string]: unknown }
 type Cfg = FindOptions & { keychain: boolean }
 
 const GLOBAL = 'global'
+
+// Bash calls running now: the slots are set while any is, so hooks, MCP servers and commands
+// started between calls never inherit them.
+let running = 0
+let slotsSet = 0
+let envRefused = false
+let overflowSaid = false
+
+/** Sets slot `i` (0-based) to a value, or unsets it. `$.env.set` takes literal names only, hence the switch. */
+function setSlot($: EngineInterface, i: number, value: string | undefined) {
+  switch (i) {
+    case 0: return $.env.set('SECRET_KEEPER_1', value)
+    case 1: return $.env.set('SECRET_KEEPER_2', value)
+    case 2: return $.env.set('SECRET_KEEPER_3', value)
+    case 3: return $.env.set('SECRET_KEEPER_4', value)
+    case 4: return $.env.set('SECRET_KEEPER_5', value)
+    case 5: return $.env.set('SECRET_KEEPER_6', value)
+    case 6: return $.env.set('SECRET_KEEPER_7', value)
+    case 7: return $.env.set('SECRET_KEEPER_8', value)
+    case 8: return $.env.set('SECRET_KEEPER_9', value)
+    case 9: return $.env.set('SECRET_KEEPER_10', value)
+    case 10: return $.env.set('SECRET_KEEPER_11', value)
+    case 11: return $.env.set('SECRET_KEEPER_12', value)
+    case 12: return $.env.set('SECRET_KEEPER_13', value)
+    case 13: return $.env.set('SECRET_KEEPER_14', value)
+    case 14: return $.env.set('SECRET_KEEPER_15', value)
+    default: return $.env.set('SECRET_KEEPER_16', value)
+  }
+}
+
+/** Fills the first slots with values; resolves with why not when the engine refuses a write. */
+async function fillSlots($: EngineInterface, values: readonly string[]): Promise<string | undefined> {
+  for (let i = 0; i < values.length; i++) {
+    const r = await Promise.resolve(setSlot($, i, values[i])).catch((err: unknown) => ({ deny: String(err) }))
+    if (r.deny) return r.deny
+  }
+  slotsSet = Math.max(slotsSet, values.length)
+  return undefined
+}
+
+async function clearSlots($: EngineInterface) {
+  const n = slotsSet
+  slotsSet = 0
+  for (let i = 0; i < n; i++) await Promise.resolve(setSlot($, i, undefined)).catch(() => undefined)
+}
 const WITHHELD = '[secret-keeper withheld this content: it could not be scanned]'
 const UNCHECKED = 'secret-keeper could not check this call for secrets, so it was not run.'
 
@@ -261,9 +306,29 @@ export const register: Register = (on, options) => {
         deny: `[${blocked[0]}] is not available in the shell: only secrets the person pasted or stored are, as $NAME. Read a value found in a file from that file (for example \`set -a; . ./.env\`), and keep personal data out of commands.`,
       }
     }
-    const env = Object.fromEntries(names.flatMap(n => (v[`secret:${n}`] === undefined ? [] : [[n, v[`secret:${n}`]!]])))
-    const command = withEnv(refsToVars(e.command), env)
-    return command === e.command ? next(e) : next({ ...e, command })
+    const command = refsToVars(e.command)
+    const plain = () => (command === e.command ? next(e) : next({ ...e, command }))
+    const have = [...names].sort().filter(n => v[`secret:${n}`] !== undefined)
+    if (have.length === 0 || envRefused) return plain()
+    if (have.length > SLOTS && !overflowSaid) {
+      overflowSaid = true
+      $.ui.log(`only ${SLOTS} stored secrets fit in a Bash call; ${have.slice(SLOTS).join(', ')} ${have.length - SLOTS === 1 ? 'is' : 'are'} left out`)
+    }
+    const used = have.slice(0, SLOTS)
+
+    running++
+    try {
+      const refused = await fillSlots($, used.map(n => v[`secret:${n}`]!))
+      if (refused) {
+        // Never fall back to putting values in the command: hooks beneath would see and might log them.
+        envRefused = true
+        $.ui.log(`stored secrets are not available in Bash this session: the environment write was refused (${refused})`)
+        return await plain()
+      }
+      return await next({ ...e, command: prefixFor(used) + command })
+    } finally {
+      if (--running === 0) await clearSlots($)
+    }
   }).catch(($, e, next) => (next.called ? next(e) : { deny: UNCHECKED }))
 
   on('prompt.section', { name: 'env_info_simple' }, async ($, e, next) => {
