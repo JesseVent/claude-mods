@@ -2,7 +2,7 @@
   "name": "context-compass",
   "version": "0.3.0",
   "description": "What a Claude Code session has in context: budget, files and how much of each was read, stale files, skills, helper agents, and what compaction summarised.",
-  "author": { "name": "Jesse Davies" },
+  "author": { "name": "JesseVent" },
   "license": "MIT",
   "types": "./types/index.d.ts"
 }

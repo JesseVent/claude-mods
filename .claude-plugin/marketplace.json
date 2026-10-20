@@ -1,9 +1,9 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Jesse Davies's Claude Code mods: keep pasted secrets out of the transcript, and see what a session has in context.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, and let a session drive itself toward a goal.",
   "owner": {
-    "name": "Jesse Davies",
+    "name": "JesseVent",
     "url": "https://github.com/JesseVent"
   },
   "plugins": [
@@ -31,6 +31,19 @@
         "context",
         "sidebar",
         "tmux"
+      ]
+    },
+    {
+      "name": "autopilot",
+      "source": "./plugins/autopilot",
+      "description": "Drives a Claude Code session toward a goal on its own: rewrites the prompts you type, decides permission asks and questions from the whole conversation, and sends the next instruction after each turn until the goal is done.",
+      "category": "productivity",
+      "tags": [
+        "mods",
+        "autopilot",
+        "autonomy",
+        "permissions",
+        "prompts"
       ]
     }
   ]
