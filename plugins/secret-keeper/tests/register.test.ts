@@ -17,7 +17,8 @@ const fail = () => ({ value: { exitCode: 44, stdout: '', stderr: '', isStdoutTru
  * The world beneath the mod: a git repo at ROOT, a Keychain in memory, a process environment, tools that echo
  * what they got. `during` is what slot 1 (SECRET_KEEPER_1) held while each Bash call ran.
  */
-function world(on: On, store: Record<string, unknown> = {}, items = new Map<string, string>(), opts: { refuseEnv?: boolean; gate?: Promise<void> } = {}) {
+type WorldOptions = { refuseEnv?: boolean; refuse?: (name: string, value?: string) => boolean; gate?: Promise<void> }
+function world(on: On, store: Record<string, unknown> = {}, items = new Map<string, string>(), opts: WorldOptions = {}) {
   const argvs: string[][] = []
   const ran: string[] = []
   const during: string[] = []
@@ -26,7 +27,7 @@ function world(on: On, store: Record<string, unknown> = {}, items = new Map<stri
   const envs: Array<Record<string, string>> = []
   mock.store(on, store)
   on('env.set', ($, e) => {
-    if (opts.refuseEnv) return { deny: 'held by policy' }
+    if (opts.refuseEnv || opts.refuse?.(e.name, e.value)) return { deny: 'held by policy' }
     if (e.value === undefined) env.delete(e.name)
     else env.set(e.name, e.value)
     return { value: {} }
@@ -122,6 +123,25 @@ describe('pasting', () => {
     expect(w.envs).toEqual([{ SECRET_KEEPER_1: gh, SECRET_KEEPER_2: npm }])
     expect(w.ran).toEqual([`${prefixFor(['GITHUB_TOKEN', 'NPM_TOKEN'])}make release`])
     expect(w.env.size).toBe(0)
+  })
+
+  test('a write refused partway clears the slots already set and runs the command as written', async ($, on) => {
+    const w = world(on, {}, undefined, { refuse: (name, value) => name === 'SECRET_KEEPER_2' && value !== undefined })
+    await submit($, `GITHUB_TOKEN=${PROVIDER_FAKES.github!()} NPM_TOKEN=${PROVIDER_FAKES.npm!()}`)
+    await call($, { tool: 'Bash', command: 'make release' })
+    expect(w.ran).toEqual(['make release'])
+    expect(w.env.size).toBe(0)
+  })
+
+  test('an unset that fails is retried, and Bash stops getting secrets meanwhile', async ($, on) => {
+    let refusals = 1
+    const w = world(on, {}, undefined, { refuse: (name, value) => value === undefined && refusals-- > 0 })
+    await submit($, `GROQ_API_KEY=${PROVIDER_FAKES.groq!()}`)
+    await call($, { tool: 'Bash', command: 'true' })
+    expect(w.env.has('SECRET_KEEPER_1')).toBe(true)
+    await call($, { tool: 'Bash', command: 'true' })
+    expect(w.env.size).toBe(0)
+    expect(w.ran).toEqual([`${prefixFor(['GROQ_API_KEY'])}true`, 'true'])
   })
 
   test('a refused environment write leaves the command as written: never values inline', async ($, on) => {

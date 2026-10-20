@@ -49,20 +49,32 @@ function setSlot($: EngineInterface, i: number, value: string | undefined) {
   }
 }
 
-/** Fills the first slots with values; resolves with why not when the engine refuses a write. */
+const write = ($: EngineInterface, i: number, value: string | undefined) =>
+  Promise.resolve(setSlot($, i, value)).catch((err: unknown) => ({ deny: String(err) }))
+
+/** Fills the first slots with values, counting each as it lands; resolves with why not when a write is refused. */
 async function fillSlots($: EngineInterface, values: readonly string[]): Promise<string | undefined> {
   for (let i = 0; i < values.length; i++) {
-    const r = await Promise.resolve(setSlot($, i, values[i])).catch((err: unknown) => ({ deny: String(err) }))
+    const r = await write($, i, values[i])
     if (r.deny) return r.deny
+    slotsSet = Math.max(slotsSet, i + 1)
   }
-  slotsSet = Math.max(slotsSet, values.length)
   return undefined
 }
 
-async function clearSlots($: EngineInterface) {
-  const n = slotsSet
-  slotsSet = 0
-  for (let i = 0; i < n; i++) await Promise.resolve(setSlot($, i, undefined)).catch(() => undefined)
+/** Unsets every slot set; one that will not unset stays counted, to try again. Resolves with why, if any did not. */
+async function clearSlots($: EngineInterface): Promise<string | undefined> {
+  let failed: string | undefined
+  let left = 0
+  for (let i = 0; i < slotsSet; i++) {
+    const r = await write($, i, undefined)
+    if (r.deny) {
+      failed ??= r.deny
+      left = i + 1
+    }
+  }
+  slotsSet = left
+  return failed
 }
 const WITHHELD = '[secret-keeper withheld this content: it could not be scanned]'
 const UNCHECKED = 'secret-keeper could not check this call for secrets, so it was not run.'
@@ -309,6 +321,8 @@ export const register: Register = (on, options) => {
     const command = refsToVars(e.command)
     const plain = () => (command === e.command ? next(e) : next({ ...e, command }))
     const have = [...names].sort().filter(n => v[`secret:${n}`] !== undefined)
+    // Slots an earlier unset left behind get another try before anything else runs.
+    if (running === 0 && slotsSet > 0) await clearSlots($)
     if (have.length === 0 || envRefused) return plain()
     if (have.length > SLOTS && !overflowSaid) {
       overflowSaid = true
@@ -327,7 +341,12 @@ export const register: Register = (on, options) => {
       }
       return await next({ ...e, command: prefixFor(used) + command })
     } finally {
-      if (--running === 0) await clearSlots($)
+      const stuck = --running === 0 ? await clearSlots($) : undefined
+      if (stuck) {
+        // Say so, and stop handing secrets to Bash: a value left in Claude Code's environment reaches whatever it starts next.
+        envRefused = true
+        $.ui.log(`a stored secret could not be cleared from Claude Code's environment (${stuck}); stored secrets stay out of Bash for this session, and a restart drops it`)
+      }
     }
   }).catch(($, e, next) => (next.called ? next(e) : { deny: UNCHECKED }))
 
