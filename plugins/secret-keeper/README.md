@@ -6,7 +6,8 @@ Paste an API key into Claude Code and keep working. secret-keeper hides the key 
 you paste:    ELEVENLABS_API_KEY=sk_…
 Claude sees:  ELEVENLABS_API_KEY=[secret:ELEVENLABS_API_KEY]
 Claude runs:  bun run tts.ts
-Bash gets:    export ELEVENLABS_API_KEY='…'; bun run tts.ts
+Bash runs:    export ELEVENLABS_API_KEY="$SECRET_KEEPER_1"; bun run tts.ts
+              with SECRET_KEEPER_1 holding the value for that call only
 ```
 
 Built and tested on Claude Code 2.1.303.
@@ -23,7 +24,14 @@ or from a shell: `claude plugin marketplace add JesseVent/claude-mods`, then `cl
 
 - **Pasting.** Each secret in a prompt becomes `[secret:NAME]`. The name is the one you pasted it with (`NAME=value`, `export NAME=…`, `"NAME": "…"`). With no name, it's the provider's usual variable, such as `OPENAI_API_KEY` or `GITHUB_TOKEN`. The value goes to the login Keychain (service `claude-secret-keeper`), on stdin, never in a process argument. Pasting a new value under a name you already stored replaces it.
 - **Per project.** A stored secret belongs to the project you pasted it in: the git root, else the working directory. Sessions in that project load it; sessions in other projects don't. `/secrets global NAME` shares one with every project.
-- **Bash.** Every Bash command starts with `export NAME='…';` for each secret this project has. The transcript keeps the command as Claude wrote it, with `$NAME`, so the value isn't stored there. A `[secret:NAME]` Claude writes into a command becomes `"${NAME}"`.
+- **Bash.** Values travel in the environment, never in the command text.
+  - While a Bash call runs, the process variables `SECRET_KEEPER_1` to `SECRET_KEEPER_16` hold this project's secrets.
+  - The command gets a prefix of plain exports that name those slots, such as `export GITHUB_TOKEN="$SECRET_KEEPER_1" NPM_TOKEN="$SECRET_KEEPER_2";`.
+  - Why: the hooks beneath a mod and the permission check see the command as rewritten. Some hooks log it, and the auto-mode classifier reads it. None of them ever see a value.
+  - Allow rules such as `Bash(git push:*)` still match, because the prefix is ordinary `export`s.
+  - The transcript keeps the command as Claude wrote it, with `$NAME`.
+  - A `[secret:NAME]` Claude writes into a command becomes `"${NAME}"`.
+  - If an environment write is refused, Bash runs without the secrets. They are never put in the command instead.
 - **Files.** In `Edit`, `Write` and `NotebookEdit`, `[secret:NAME]` is written as the real value, so `NAME=[secret:NAME]` in a `.env` file works, and so does an edit to a line that holds a key.
 - **Everything Claude reads.** Tool output, file contents, Claude's own text and notices are scanned before they're stored or sent:
   - a new secret found there is hidden for the session, but not stored or exported;
@@ -87,7 +95,9 @@ Set in `/plugin`; they're stored under `pluginConfigs` in settings.
 ## What it can reach
 
     ❯ ./register.ts hooks: session.start, prompt.submit, session.append, tool.call{tool=Edit}, tool.call{tool=Write}, tool.call{tool=NotebookEdit}, tool.call{tool=Bash}, prompt.section{name=env_info_simple}, command.run{command=secrets}
-    ❯ ./register.ts calls: $.command.register, $.process.run (via ensure, runner), $.session.cwd (via ensure), $.state.get, $.state.set, $.store.get (via getIndex), $.store.set, $.ui.invalidate, $.ui.log
+    ❯ ./register.ts calls: $.command.register, $.env.set (via setSlot), $.process.run (via ensure, runner), $.session.cwd (via ensure), $.state.get, $.state.set, $.store.get (via getIndex), $.store.set, $.ui.invalidate, $.ui.log
+    ❯ ./register.ts env writes: SECRET_KEEPER_1, SECRET_KEEPER_10, SECRET_KEEPER_11, SECRET_KEEPER_12, SECRET_KEEPER_13, SECRET_KEEPER_14, SECRET_KEEPER_15, SECRET_KEEPER_16, SECRET_KEEPER_2, SECRET_KEEPER_3, SECRET_KEEPER_4, SECRET_KEEPER_5, SECRET_KEEPER_6, SECRET_KEEPER_7, SECRET_KEEPER_8, SECRET_KEEPER_9
+    ❯ ./register.ts env reads: nothing
     ❯ ./register.ts state writes: secret-keeper.exported, secret-keeper.project, secret-keeper.vault
     ❯ ./register.ts state reads: secret-keeper.exported, secret-keeper.project, secret-keeper.vault
 
@@ -100,6 +110,9 @@ It runs two local programs and makes no network calls:
 ## Limits
 
 - **It doesn't stop a value leaving the machine.** Bash has your stored secrets in its environment, so an instruction hidden in a page or file Claude reads could have it send one out (`curl … -d "$OPENAI_API_KEY"`). Turn on `/sandbox` with a network allowlist; that's what stops the send. Keeping secrets per project limits how many one session holds.
+- **During a Bash call, what Claude Code starts inherits the slot variables.** That's the command itself, the settings hooks that run for it, and anything else started in that window. Between calls they're unset. A hook that logs commands sees only the `export NAME="$SECRET_KEEPER_n"` prefix.
+- **16 secrets per project at most reach Bash.** They're taken in name order, and the rest are left out with one log line.
+- **Hooks on `Edit`, `Write` and `NotebookEdit` see restored values**, because the value has to reach the tool for the file to get it.
 - **Other programs running as you can read the items.** The items trust `/usr/bin/security`, so any script you run can read them without a prompt, the same as your `.env` files. Claude's shell is refused any command that names the service.
 - **macOS only for storage.** Elsewhere, saving fails with one log line and pasted secrets last the session.
 - **A secret with no known shape and no secret-sounding name** stays visible: a bare 40-character token pasted on its own, for example. Paste it as `NAME=value` and the name carries it. When Claude does see one in plain text, the note tells it to say so once.
