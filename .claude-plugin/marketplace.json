@@ -1,0 +1,37 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-mods",
+  "description": "Jesse Davies's Claude Code mods: keep pasted secrets out of the transcript, and see what a session has in context.",
+  "owner": {
+    "name": "Jesse Davies",
+    "url": "https://github.com/JesseVent"
+  },
+  "plugins": [
+    {
+      "name": "secret-keeper",
+      "source": "./plugins/secret-keeper",
+      "description": "Hides the secrets you paste before Claude or the transcript sees them, stores them per project in the macOS Keychain, and exports them to Bash as environment variables. Optional PII hiding.",
+      "category": "security",
+      "tags": [
+        "mods",
+        "security",
+        "secrets",
+        "keychain",
+        "env",
+        "pii"
+      ]
+    },
+    {
+      "name": "context-compass",
+      "source": "./plugins/context-compass",
+      "description": "What a Claude Code session has in context: budget, files and how much of each was read, stale files, skills, helper agents, and what compaction summarised.",
+      "category": "productivity",
+      "tags": [
+        "mods",
+        "context",
+        "sidebar",
+        "tmux"
+      ]
+    }
+  ]
+}

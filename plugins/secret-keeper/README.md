@@ -1,0 +1,113 @@
+# secret-keeper
+
+Paste an API key into Claude Code and keep working. secret-keeper hides the key before Claude or the transcript sees it, stores it in your macOS Keychain for this project, and exports it to every Bash command as an environment variable. Claude writes `$ELEVENLABS_API_KEY`, your scripts read `process.env.ELEVENLABS_API_KEY`, and the value never enters the conversation.
+
+```
+you paste:    ELEVENLABS_API_KEY=sk_…
+Claude sees:  ELEVENLABS_API_KEY=[secret:ELEVENLABS_API_KEY]
+Claude runs:  bun run tts.ts
+Bash gets:    export ELEVENLABS_API_KEY='…'; bun run tts.ts
+```
+
+Built and tested on Claude Code 2.1.303.
+
+## Install
+
+```
+/plugin install secret-keeper --marketplace JesseVent/claude-mods
+```
+
+or from a shell: `claude plugin marketplace add JesseVent/claude-mods`, then `claude plugin install secret-keeper@claude-mods`, then `/reload-plugins` in an open session.
+
+## How it works
+
+- **Pasting.** Each secret in a prompt becomes `[secret:NAME]`. The name is the one you pasted it with (`NAME=value`, `export NAME=…`, `"NAME": "…"`). With no name, it's the provider's usual variable, such as `OPENAI_API_KEY` or `GITHUB_TOKEN`. The value goes to the login Keychain (service `claude-secret-keeper`), on stdin, never in a process argument. Pasting a new value under a name you already stored replaces it.
+- **Per project.** A stored secret belongs to the project you pasted it in: the git root, else the working directory. Sessions in that project load it; sessions in other projects don't. `/secrets global NAME` shares one with every project.
+- **Bash.** Every Bash command starts with `export NAME='…';` for each secret this project has. The transcript keeps the command as Claude wrote it, with `$NAME`, so the value isn't stored there. A `[secret:NAME]` Claude writes into a command becomes `"${NAME}"`.
+- **Files.** In `Edit`, `Write` and `NotebookEdit`, `[secret:NAME]` is written as the real value, so `NAME=[secret:NAME]` in a `.env` file works, and so does an edit to a line that holds a key.
+- **Everything Claude reads.** Tool output, file contents, Claude's own text and notices are scanned before they're stored or sent:
+  - a new secret found there is hidden for the session, but not stored or exported;
+  - a value it already knows is hidden again wherever it shows up: raw, JSON-escaped, base64, base64url or hex.
+- **The standing note.** One paragraph in the environment section tells Claude:
+  - how placeholders work;
+  - that pasting a key is expected and needs no warning;
+  - that a secret it does see in plain text was missed and is worth saying so once;
+  - which names Bash has.
+- **Failing closed.** If a scan fails, the row is withheld, the prompt is not sent, or the tool call is refused. Nothing gets through unscanned.
+
+## Commands
+
+| | |
+| --- | --- |
+| `/secrets` | What's stored for this project and globally, plus a count for other projects and what this session hid |
+| `/secrets rm NAME` | Remove one (this project's first, then the global one) |
+| `/secrets rm all` | Remove every secret secret-keeper stored, in every project |
+| `/secrets global NAME` | Share this project's secret with every project |
+| `/secrets local NAME` | Make a global secret this project's only |
+
+## Options
+
+Set in `/plugin`; they're stored under `pluginConfigs` in settings.
+
+- `pii` (default `false`): also hide personal data, checking the check digit where there is one:
+  - email addresses and phone numbers;
+  - payment cards (Luhn) and IBANs (mod-97);
+  - Australian TFN, Medicare and ABN numbers;
+  - US SSNs.
+
+  Each appears as `[pii:EMAIL#1]`. It's never stored or exported, and a Bash command that names one is refused.
+- `keychain` (default `true`): off keeps pasted secrets for the session only.
+- `off` (default empty): comma-separated rule ids to skip, for example `assignment,jwt`.
+
+## Rules
+
+**Providers, by documented prefix:**
+`anthropic`, `openai`, `openai-scoped`, `openrouter`, `elevenlabs`, `deepseek`, `aws-access-key`, `github`, `github-fine-grained`, `gitlab`, `slack`, `slack-webhook`, `stripe`, `stripe-webhook`, `sendgrid`, `twilio`, `google`, `google-oauth`, `supabase-pat`, `supabase-secret`, `posthog`, `xai`, `groq`, `replicate`, `perplexity`, `huggingface`, `npm`, `pypi`, `linear`, `notion`, `resend`, `shopify`, `databricks`, `sentry`, `discord-bot`, `discord-webhook`, `telegram`, `mailgun`, `mailchimp`, `doppler`, `digitalocean`, `mapbox`, `fireworks`, `figma`, `atlassian`, `square`, `age`.
+
+**By structure:**
+- `private-key`: a PEM block;
+- `private-key-partial`: a PEM block cut off before its END line;
+- `jwt`;
+- `url-credentials`: a URL with a real password. Local defaults like `postgres:postgres@` are left alone.
+- `auth-header`: an `Authorization: Bearer …` value;
+- `api-key-header`: an `x-api-key: …` value.
+
+**`assignment`:** a value assigned to a name that says it's secret (`*_API_KEY`, `*_SECRET`, `*_TOKEN`, `PASSWORD`, …). It has no prefix to go on, so the value must also look generated:
+- a letter and a digit;
+- 12 or more characters, or 8 or more mixing upper and lower case;
+- at least 3 bits of entropy per character;
+- not mostly made of words (that's a name, like `EthereumWeb3Credentials`);
+- not a reference or a sample (`$VAR`, `process.env.X`, `changeme`, `your-api-key`, `test`, …);
+- unquoted, no code punctuation (that's minified JavaScript).
+
+**False positives.** A sweep of 154,425 files (1.07 GB: a `node_modules` tree, a large TypeScript codebase, an archived app with its dependencies) gave these results:
+- **The provider rules:** no hits on ordinary code.
+- **All the rules together:** 23 hits, and every one is a credential-shaped test fixture or a documentation example: sample PEM keys, JWT test vectors, UUID access tokens in fixtures. Hiding those costs nothing, since an `Edit` still restores them.
+
+## What it can reach
+
+    ❯ ./register.ts hooks: session.start, prompt.submit, session.append, tool.call{tool=Edit}, tool.call{tool=Write}, tool.call{tool=NotebookEdit}, tool.call{tool=Bash}, prompt.section{name=env_info_simple}, command.run{command=secrets}
+    ❯ ./register.ts calls: $.command.register, $.process.run (via ensure, runner), $.session.cwd (via ensure), $.state.get, $.state.set, $.store.get (via getIndex), $.store.set, $.ui.invalidate, $.ui.log
+    ❯ ./register.ts state writes: secret-keeper.exported, secret-keeper.project, secret-keeper.vault
+    ❯ ./register.ts state reads: secret-keeper.exported, secret-keeper.project, secret-keeper.vault
+
+It runs two local programs and makes no network calls:
+- `git rev-parse --show-toplevel`, once per session, to find the project;
+- `/usr/bin/security`, to add, find and delete its own Keychain items.
+
+`$.store` holds an index of names, scopes and dates, never values.
+
+## Limits
+
+- **It doesn't stop a value leaving the machine.** Bash has your stored secrets in its environment, so an instruction hidden in a page or file Claude reads could have it send one out (`curl … -d "$OPENAI_API_KEY"`). Turn on `/sandbox` with a network allowlist; that's what stops the send. Keeping secrets per project limits how many one session holds.
+- **Other programs running as you can read the items.** The items trust `/usr/bin/security`, so any script you run can read them without a prompt, the same as your `.env` files. Claude's shell is refused any command that names the service.
+- **macOS only for storage.** Elsewhere, saving fails with one log line and pasted secrets last the session.
+- **A secret with no known shape and no secret-sounding name** stays visible: a bare 40-character token pasted on its own, for example. Paste it as `NAME=value` and the name carries it. When Claude does see one in plain text, the note tells it to say so once.
+- **The model's own tool-call blocks aren't rewritable**, and neither are the tool records the engine keeps beside the conversation. A `Write` record keeps the file as written, with the value in it.
+- **A slash command's arguments** aren't scanned (`prompt.submit` doesn't rewrite commands). Paste keys as a normal message.
+- **Single quotes.** `[secret:NAME]` inside single quotes in a shell command stays literal, as `$NAME` would.
+- **Images aren't scanned.**
+
+## Uninstall
+
+Run `/secrets rm all`, then disable it in `/plugin`. Disabling it alone leaves the items in your login Keychain under the service `claude-secret-keeper`.

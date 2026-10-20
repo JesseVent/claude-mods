@@ -1,0 +1,11 @@
+{
+  "modules": ["./register.tsx"],
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/ctx-hook.mjs\"" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/ctx-hook.mjs\"" } ] }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "secret-keeper",
+  "version": "1.0.0",
+  "description": "Keeps the secrets you paste out of Claude's context and the transcript, stores them per project in the macOS Keychain, and hands them to Bash as environment variables. Optional PII hiding.",
+  "author": { "name": "Jesse Davies", "url": "https://github.com/JesseVent" },
+  "repository": "https://github.com/JesseVent/claude-mods",
+  "license": "MIT",
+  "keywords": ["mods", "security", "secrets", "keychain", "env", "pii"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "pii": {
+      "type": "boolean",
+      "title": "Hide personal data",
+      "description": "Also hide emails, phone numbers, payment cards, IBANs, Australian TFN, Medicare and ABN numbers, and US SSNs. Secrets are always hidden.",
+      "default": false
+    },
+    "keychain": {
+      "type": "boolean",
+      "title": "Store pasted secrets in the Keychain",
+      "description": "Save secrets you paste to the macOS Keychain for this project and load them in later sessions. Off: they last the session only.",
+      "default": true
+    },
+    "off": {
+      "type": "string",
+      "title": "Rules off",
+      "description": "Comma-separated rule ids to skip, for example assignment,jwt. The ids are listed in the README.",
+      "default": ""
+    }
+  }
+}
