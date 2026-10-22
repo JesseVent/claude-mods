@@ -1,3 +1,4 @@
+<img width="1376" height="768" alt="claudemods" src="https://github.com/user-attachments/assets/1a771356-a6e2-4099-9167-c18a4cf6775a" />
 # claude-mods
 
 Claude Code mods for safer secrets, better session awareness, and more autonomous work.
