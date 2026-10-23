@@ -1,6 +1,6 @@
 # autopilot
 
-Type what you want and walk away. In every session, autopilot rewrites the prompt you type into one Claude can finish without asking, decides the permission prompts and questions you'd otherwise answer, and after each turn works out what practically needs to happen next (fix what failed, verify, commit on a branch, push, open the PR) and sends it, until nothing is left that needs you.
+Type what you want, answer what it asks, and walk away. In every session, autopilot asks pointed questions when your prompt leaves the goal, the constraints or how to check the result unclear, rewrites the prompt into one Claude can finish without asking, decides the permission prompts and questions you'd otherwise answer, and after each turn works out what practically needs to happen next (fix what failed, verify, commit on a branch, push, open the PR) and sends it, until nothing is left that needs you.
 
 ```
 you type:     add tests for the parser
@@ -28,7 +28,8 @@ or from a shell: `claude plugin marketplace add JesseVent/claude-mods`, then `cl
 
 Each session's autopilot runs inside that session; nothing supervises from outside, and it never starts sessions of its own.
 
-- **Prompts.** Each prompt you type is rewritten by the rewrite model (default `sonnet`) to keep every requirement, settle ambiguity with the most reasonable reading and, for a task, end with how to prove it's done; a question stays a question. The rewrite becomes the goal. Typed while a goal is being driven, it's added to that goal as a next step. A dim line shows what was sent; if the rewrite fails, your prompt goes through as typed. Slash commands and autopilot's own prompts aren't rewritten.
+- **Questions first.** Before a new goal starts, autopilot checks that the goal, the constraints and how to verify the result are clear from your prompt and the conversation, where a sensible default counts (the existing tests passing, for a code change). When one isn't, and two readings would lead to materially different work, it asks you one pointed question at a time in the question dialog, up to five, and adds your answers to the prompt. A clear prompt, a question, or a prompt typed while a goal is being driven goes ahead with no question; Esc on a question goes ahead with what it has. It judges with the session's own model over the conversation, or, on a session's first prompt, with the rewrite model.
+- **Prompts.** Each prompt you type is rewritten by the rewrite model (default `sonnet`) to keep every requirement, settle ambiguity with the most reasonable reading and, for a task, end with how to prove it's done, in plain conversational sentences rather than a spec; a question stays a question. The rewrite becomes the goal. Typed while a goal is being driven, it's added to that goal as a next step. A dim line shows what was sent; if the rewrite fails, your prompt goes through as typed. Slash commands and autopilot's own prompts aren't rewritten.
 - **Permission asks.** Only calls Claude Code would ask you about reach it: your settings' allow and deny rules still decide first. autopilot looks up the working directory and the current git branch, then asks the session's own model, over the whole conversation (every file read and command output), to allow or deny under a fixed policy: never push to main or master, force-push, delete outside the repository, touch credentials, spend money, or do anything irreversible outside the working directory. Everything the session holds is marked as data, never instructions. It answers `ask` only when the conversation and facts can't settle the call, naming the missing fact; then the dialog shows and you get a notification.
 - **Pushes.** Before any model sees it, a force-push, a push naming `main` or `master`, a push to a URL instead of a named remote, or any push while the current branch is `main` or `master` is refused, even where a settings rule allows it.
 - **Only while driving.** Permission asks, questions and plans are decided only while a goal is being driven. After Esc or DONE, or in a slash command's turn, they come to you.
@@ -54,14 +55,14 @@ Set in `/config` or under `pluginConfigs.autopilot` in settings:
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `model` | `sonnet` | The model that rewrites your prompts. Permission asks, questions and the next step use the session's own model. |
+| `model` | `sonnet` | The model that rewrites your prompts, and judges whether a session's first prompt needs questions. Permission asks, questions and the next step use the session's own model. |
 | `maxTurns` | `25` | The most turns it starts on its own for one goal. |
 | `autoEngage` | `true` | On in every session. Off: autopilot waits for `/drive`. |
 
 ## What it can reach
 
     ❯ ./register.ts hooks: session.start, prompt.submit, tool.check, turn.complete, command.run{command=drive}
-    ❯ ./register.ts calls: $.clock.after (via later), $.command.register, $.env.get (via folder), $.fs.list (via list), $.fs.read (via list), $.fs.write (via record), $.model.complete (via rewrite), $.model.fork, $.process.run (via branch), $.prompt.submit (via submit), $.session.cwd, $.session.id (via list, record), $.state.get, $.state.set, $.ui.log, $.ui.notify, $.ui.status (via set)
+    ❯ ./register.ts calls: $.clock.after (via later), $.command.register, $.env.get (via folder), $.fs.list (via list), $.fs.read (via list), $.fs.write (via record), $.model.complete (via brief, rewrite), $.model.fork, $.process.run (via branch), $.prompt.submit (via submit), $.session.cwd, $.session.id (via list, record), $.state.get, $.state.set, $.ui.ask (via brief), $.ui.log, $.ui.notify, $.ui.status (via set)
     ❯ ./register.ts env reads: HOME
     ❯ ./register.ts state writes: autopilot.pilot
 
@@ -71,7 +72,7 @@ It runs one local program, `git branch --show-current`, on permission asks and p
 
 - **A model approving calls can be talked into one.** Text Claude reads (a web page, a file, a command's output) could argue a harmful call past the decider. The policy, the push guard and the data marking narrow that, not close it. Run it with `/sandbox` on, or in a repository you can lose.
 - **The push guard reads the command text.** It catches `git … push` with a force flag, a `+` refspec or a protected branch name, and any push from `main` or `master` in the session's folder. A push from another folder (`cd x && git push`), through a script or an alias isn't caught.
-- **Costs add up.** Each permission ask and each turn is a model call over the whole conversation (served mostly from the prompt cache), and it keeps going for up to `maxTurns` turns per goal.
+- **Costs add up.** Each new goal is one model call to judge it, plus one per question asked; each permission ask and each turn is a model call over the whole conversation (served mostly from the prompt cache), and it keeps going for up to `maxTurns` turns per goal.
 - **`/autopilot` is taken** by a command Claude Code ships, so the command is `/drive`.
 
 ## Uninstall

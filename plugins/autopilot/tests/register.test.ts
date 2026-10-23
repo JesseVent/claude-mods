@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { PUSH, RISKY, verdict } from '../hooks/register'
+import { PUSH, question, RISKY, verdict } from '../hooks/register'
 
 type Decision = 'allow' | 'ask' | 'deny'
 type Check = { decision: Decision; reason?: string }
@@ -12,18 +12,35 @@ const failed = { value: { isAnswered: false, reason: 'api-error', status: 500, e
 
 /**
  * The engine beneath the mod: a session at /work/app on `branch`, a model whose rewrite echoes its prompt, a fork
- * that answers through `fork` (undefined: an API error), and a permission check that answers `engine`.
+ * that answers through `fork` (undefined: an API error), and a permission check that answers `engine`. The questions
+ * asked before a goal is driven go to `grill` (ready by default; with `fresh`, a fork has nothing to share yet, so the
+ * rewrite model judges), and the person answers them through `answer` (undefined: dismissed).
  */
-type WorldOptions = { fork?: (prompt: string) => string | undefined; branch?: string; engine?: Decision }
+type WorldOptions = {
+  fork?: (prompt: string) => string | undefined
+  grill?: (prompt: string) => string | undefined
+  answer?: (question: string) => string | undefined
+  fresh?: boolean
+  branch?: string
+  engine?: Decision
+}
 function world(on: On, o: WorldOptions = {}) {
-  const w = { forks: [] as string[], rewrites: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
+  const w = { forks: [] as string[], rewrites: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
+  const grilled = (prompt: string) => (w.grills.push(prompt), said(o.grill?.(prompt) ?? '{"ready":true}'))
+  on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+    const q = e.questions[0]!.question
+    w.asked.push(q)
+    const a = o.answer?.(q)
+    return a === undefined ? { deny: 'dismissed' } : { result: { questions: e.questions, answers: { [q]: a } } }
+  })
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 's1' }))
   on('env.get', () => ({ value: '/home/me' }))
   on('fs.write', ($, e) => (w.files.set(e.path, e.text), { value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: `${o.branch ?? 'feat/x'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('model.complete', ($, e) => (w.rewrites.push(e.prompt), said(`rewritten: ${e.prompt}`)))
+  on('model.complete', ($, e) => (e.prompt.includes('<answers>') ? grilled(e.prompt) : (w.rewrites.push(e.prompt), said(`rewritten: ${e.prompt}`))))
   on('model.fork', ($, e) => {
+    if (e.prompt.includes('<answers>')) return o.fresh ? { value: { isAnswered: false as const, reason: 'nothing-to-fork' as const } } : grilled(e.prompt)
     w.forks.push(e.prompt)
     const text = o.fork?.(e.prompt)
     return text === undefined ? failed : said(text)
@@ -136,6 +153,33 @@ describe('on by default', () => {
     await start($)
     await type($, 'add a line', 'composer', 't0')
     expect(row(w).goal).toBe('rewritten: add a line')
+  })
+})
+
+describe('asking first', () => {
+  test('a vague prompt is asked about until it is clear, and the answers reach the rewrite', async ($, on) => {
+    const replies = ['{"question":"Which page is slow?","options":["Settings","Dashboard"]}', 'Sure: {"question":"Can the API change?","options":["Yes","No"]}', '{"ready":true}']
+    const w = world(on, { engine: 'allow', grill: () => replies.shift(), answer: q => (q === 'Which page is slow?' ? 'Settings' : 'No') })
+    await start($)
+    expect(await type($, 'make it faster')).toBe('rewritten: make it faster\n\nAnswered before starting:\nWhich page is slow? Settings\nCan the API change? No')
+    expect(w.asked).toEqual(['Which page is slow?', 'Can the API change?'])
+    expect(w.grills[1]).toContain('<answers>Which page is slow? Settings</answers>')
+  })
+
+  test('a clear prompt, or one typed over a goal being driven, goes ahead with no question', async ($, on) => {
+    const w = world(on, { engine: 'allow' })
+    await start($)
+    expect(await type($, 'add a line to notes.txt and commit it')).toBe('rewritten: add a line to notes.txt and commit it')
+    await type($, 'and a second line', 'composer', 't1')
+    expect(w.grills).toHaveLength(1)
+    expect(w.asked).toEqual([])
+  })
+
+  test('with nothing to fork the rewrite model judges, and a dismissed question goes ahead as typed', async ($, on) => {
+    const w = world(on, { engine: 'allow', fresh: true, grill: () => '{"question":"Which page?","options":["A","B"]}' })
+    await start($)
+    expect(await type($, 'make it faster')).toBe('rewritten: make it faster')
+    expect(w.asked).toEqual(['Which page?'])
   })
 })
 
@@ -278,5 +322,11 @@ describe('the push guard and verdicts', () => {
     expect(verdict('Sure. {"decision":"allow","reason":"ok"}')).toEqual({ decision: 'allow', reason: 'ok' })
     expect(verdict('{"decision":"maybe","reason":"x"}')).toBeUndefined()
     expect(verdict('no json')).toBeUndefined()
+  })
+
+  test('question reads the next question, and anything else stops the asking', () => {
+    expect(question('{"question":"Which page?","options":["A","B",3]}')).toEqual({ question: 'Which page?', options: ['A', 'B'] })
+    expect(question('{"ready":true}')).toBeUndefined()
+    expect(question('not json')).toBeUndefined()
   })
 })
