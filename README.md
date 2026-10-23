@@ -15,7 +15,7 @@ This repo includes three mods:
 
 - `secret-keeper` — hides pasted API keys from Claude and stores them in your macOS Keychain.
 - `context-compass` — shows the live budget, files in context, disk changes, helper agents, and more.
-- `autopilot` — rewrites prompts, decides permission prompts, and keeps a goal moving across turns.
+- `autopilot` — asks pointed questions when a prompt is unclear, rewrites prompts, decides permission prompts, and keeps a goal moving across turns.
 
 ## Quick install
 
@@ -60,7 +60,7 @@ See: [plugins/context-compass](plugins/context-compass)
 
 ### autopilot
 
-Let sessions drive themselves. Prompts are rewritten, permission decisions are automated, and the next step is chosen across turns so a goal can continue without constant prompting.
+Let sessions drive themselves. When a prompt leaves the goal, constraints or how to check the result unclear, it asks you pointed questions first; then prompts are rewritten, permission decisions are automated, and the next step is chosen across turns so a goal can continue without constant prompting.
 
 Best for:
 - long-running implementation tasks
@@ -75,7 +75,7 @@ See: [plugins/autopilot](plugins/autopilot)
 | --- | --- |
 | [secret-keeper](plugins/secret-keeper) | Keeps pasted API keys hidden from Claude and the transcript, stores them in your macOS Keychain, and re-injects them as env vars. |
 | [context-compass](plugins/context-compass) | Shows what a session has in context: budget, file reads, disk changes, helper agents, skills, and compaction summaries. |
-| [autopilot](plugins/autopilot) | Lets sessions keep driving toward a goal by rewriting prompts, deciding permission prompts, and choosing the next step automatically. |
+| [autopilot](plugins/autopilot) | Lets sessions keep driving toward a goal by asking pointed questions when a prompt is unclear, rewriting prompts, deciding permission prompts, and choosing the next step automatically. |
 
 ## Notes
 
