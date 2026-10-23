@@ -72,7 +72,7 @@ It runs one local program, `git branch --show-current`, on permission asks and p
 
 - **A model approving calls can be talked into one.** Text Claude reads (a web page, a file, a command's output) could argue a harmful call past the decider. The policy, the push guard and the data marking narrow that, not close it. Run it with `/sandbox` on, or in a repository you can lose.
 - **The push guard reads the command text.** It catches `git … push` with a force flag, a `+` refspec or a protected branch name, and any push from `main` or `master` in the session's folder. A push from another folder (`cd x && git push`), through a script or an alias isn't caught.
-- **Costs add up.** Each new goal is one model call to judge it, plus one per question asked; each permission ask and each turn is a model call over the whole conversation (served mostly from the prompt cache), and it keeps going for up to `maxTurns` turns per goal.
+- **Costs add up.** Each prompt you type is one model call to rewrite it, and a new goal one more to judge it plus one per question asked; each permission ask and each turn is a model call over the whole conversation (served mostly from the prompt cache), and it keeps going for up to `maxTurns` turns per goal.
 - **`/autopilot` is taken** by a command Claude Code ships, so the command is `/drive`.
 
 ## Uninstall
