@@ -14,7 +14,8 @@ const failed = { value: { isAnswered: false, reason: 'api-error', status: 500, e
  * The engine beneath the mod: a session at /work/app on `branch`, a model whose rewrite echoes its prompt, a fork
  * that answers through `fork` (undefined: an API error), and a permission check that answers `engine`. The questions
  * asked before a goal is driven go to `grill` (ready by default; with `fresh`, a fork has nothing to share yet, so the
- * rewrite model judges), and the person answers them through `answer` (undefined: dismissed).
+ * rewrite model judges), and the person answers them through `answer` (undefined: dismissed). With `hold`, a submitted
+ * prompt waits in the queue, as it does while the session is busy, until `release()`.
  */
 type WorldOptions = {
   fork?: (prompt: string) => string | undefined
@@ -23,9 +24,11 @@ type WorldOptions = {
   fresh?: boolean
   branch?: string
   engine?: Decision
+  hold?: boolean
 }
 function world(on: On, o: WorldOptions = {}) {
-  const w = { forks: [] as string[], rewrites: [] as string[], rewritePrompts: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
+  const held: (() => void)[] = []
+  const w = { forks: [] as string[], rewrites: [] as string[], rewritePrompts: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on), release: () => held.splice(0).forEach(go => go()) }
   const grilled = (prompt: string) => (w.grills.push(prompt), said(o.grill?.(prompt) ?? '{"ready":true}'))
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
     const q = e.questions[0]!.question
@@ -49,7 +52,10 @@ function world(on: On, o: WorldOptions = {}) {
     const text = o.fork?.(e.prompt)
     return text === undefined ? failed : said(text)
   })
-  on('prompt.submit', ($, e) => (w.submitted.push(e.text), { text: e.text }))
+  on('prompt.submit', ($, e) => {
+    w.submitted.push(e.text)
+    return o.hold ? new Promise<{ text: string }>(go => held.push(() => go({ text: e.text }))) : { text: e.text }
+  })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('ui.log', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
@@ -254,14 +260,46 @@ describe('driving', () => {
     expect(JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!)).toMatchObject({ turns: 1 })
   })
 
-  test('DONE stops it without sending anything', async ($, on) => {
-    const w = world(on, { fork: () => 'DONE: tests added and green' })
+  test('DONE stops it without sending anything, its summary on one line', async ($, on) => {
+    const w = world(on, { fork: () => 'DONE: tests added and green\n- the push waits on you' })
     await drive($, 'add tests')
     await w.clock.settle()
     await ended($)
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add tests'])
-    expect(JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!)).toMatchObject({ status: 'done: tests added and green' })
+    expect(JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!)).toMatchObject({ status: 'done: tests added and green - the push waits on you' })
+  })
+
+  test('while its last step is still queued, turns something else started send no second one', async ($, on) => {
+    const w = world(on, { fork: () => 'Now run the tests.', hold: true })
+    await drive($, 'add tests')
+    await w.clock.settle()
+    await ended($)
+    await ended($)
+    expect(w.forks).toEqual([])
+    w.release()
+    await w.clock.settle()
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted).toEqual(['rewritten: add tests', 'Now run the tests.'])
+    w.release()
+    await w.clock.settle()
+  })
+
+  test('WAIT sends nothing and counts no turn, and the turn the background report starts goes on', async ($, on) => {
+    let reply = 'WAIT'
+    const w = world(on, { fork: () => reply })
+    await drive($, 'add tests')
+    await w.clock.settle()
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted).toEqual(['rewritten: add tests'])
+    expect(row(w)).toMatchObject({ status: 'waiting on background work', turns: 0 })
+    reply = 'Read verify.tsv.'
+    await ended($)
+    await w.clock.settle()
+    expect(w.submitted.at(-1)).toBe('Read verify.tsv.')
+    expect(row(w)).toMatchObject({ status: 'driving', turns: 1 })
   })
 
   test('it stops at the turn cap', { options: { maxTurns: 1 } }, async ($, on) => {
