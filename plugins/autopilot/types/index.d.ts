@@ -10,6 +10,8 @@ declare module 'claude-code' {
   interface PluginState {
     autopilot: {
       pilot: Pilot
+      /** Claude's last reply on the main thread, clipped: what a typed follow-up refers to. */
+      last: string
     }
   }
 }
