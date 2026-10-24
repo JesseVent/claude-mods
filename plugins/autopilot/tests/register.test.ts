@@ -80,7 +80,7 @@ describe('engaging', () => {
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add tests'])
     const row = JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!) as { goal: string; status: string }
-    expect(row).toMatchObject({ goal: 'rewritten: add tests', status: 'driving' })
+    expect(row).toMatchObject({ goal: 'add tests', status: 'driving' })
   })
 
   test('with autoEngage off, typed prompts are rewritten only after /drive, and its own prompts never', { options: { autoEngage: false } }, async ($, on) => {
@@ -111,7 +111,7 @@ describe('on by default', () => {
     await ended($)
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add a line', 'Commit notes.txt on feat/tides.'])
-    expect(row(w)).toMatchObject({ goal: 'rewritten: add a line', turns: 1, status: 'driving' })
+    expect(row(w)).toMatchObject({ goal: 'add a line', turns: 1, status: 'driving' })
   })
 
   test('after DONE it stays armed, and the next prompt drives again', async ($, on) => {
@@ -149,14 +149,14 @@ describe('on by default', () => {
     await ended($)
     await w.clock.settle()
     expect(w.submitted.at(-1)).toBe('Keep going.')
-    expect(row(w).goal).toBe('rewritten: do it differently')
+    expect(row(w).goal).toBe('do it differently')
   })
 
   test('a prompt typed mid-turn with no goal becomes the goal', async ($, on) => {
     const w = world(on)
     await start($)
     await type($, 'add a line', 'composer', 't0')
-    expect(row(w).goal).toBe('rewritten: add a line')
+    expect(row(w).goal).toBe('add a line')
   })
 })
 
@@ -282,7 +282,7 @@ describe('driving', () => {
     expect(w.submitted).toEqual(['rewritten: add tests'])
     await drive($, 'on')
     await w.clock.settle()
-    expect(w.submitted.at(-1)).toBe('Carry on toward the goal: rewritten: add tests')
+    expect(w.submitted.at(-1)).toBe('Carry on toward the goal: add tests')
   })
 
   for (const [why, reason, reply] of [

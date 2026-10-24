@@ -203,8 +203,10 @@ export const register: Register = (on, options) => {
     if (!p.on || e.command || e.isMeta || !HUMAN.has(e.origin.kind)) return next(e)
     // Typed over a goal being driven it steers that goal; otherwise it is the new goal, asked about first.
     const steer = !!e.turnId && p.driving && !!p.goal
-    const text = await rewrite($, steer ? e.text : await brief($, e.text))
-    await set($, steer ? { ...p, goal: `${p.goal}\n\nThen: ${text}` } : { on: true, goal: text, turns: 0, driving: true })
+    const own = steer ? e.text : await brief($, e.text)
+    const text = await rewrite($, own)
+    // The goal stays in the person's own words: the rewrite reads the session, so text Claude read could slant it.
+    await set($, steer ? { ...p, goal: `${p.goal}\n\nThen: ${own}` } : { on: true, goal: own, turns: 0, driving: true })
     return next({ ...e, text })
   }).catch(($, e, next) => next(e))
 
@@ -296,9 +298,10 @@ export const register: Register = (on, options) => {
       later($, `Carry on toward the goal: ${p.goal}`)
       return { text: `Autopilot on, resuming: ${clip(p.goal, 200)}` }
     }
-    const goal = await rewrite($, await brief($, arg))
+    const goal = await brief($, arg)
+    const text = await rewrite($, goal)
     await set($, { on: true, goal, turns: 0, driving: true })
-    later($, goal)
+    later($, text)
     return { text: 'Autopilot on.' }
   })
 }
