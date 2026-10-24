@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, and switch MCP logins per project.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, and equip a loadout of skills, MCP servers and instructions per project.",
   "owner": {
     "name": "JesseVent",
     "url": "https://github.com/JesseVent"
@@ -58,6 +58,19 @@
         "oauth",
         "slack",
         "supabase"
+      ]
+    },
+    {
+      "name": "loadouts",
+      "source": "./plugins/loadouts",
+      "description": "Requip for Claude Code: named loadouts of skills, MCP servers and instructions, one equipped per project from the /loadout picker or by Claude itself, the rest switched off. Switching never needs a restart.",
+      "category": "productivity",
+      "tags": [
+        "mods",
+        "loadouts",
+        "skills",
+        "mcp",
+        "instructions"
       ]
     }
   ]
