@@ -31,17 +31,22 @@ function world(on: On, files: Record<string, unknown> = EXAMPLES) {
     closed: [] as string[],
     logs: [] as string[],
     invalidated: [] as string[],
+    toasts: [] as string[],
     reloads: 0,
     status: undefined as string | undefined,
+    isReadOnly: false,
     clock: mock.clock(on),
   }
   const at = (path: string) => [...w.files.keys()].find(k => path.endsWith(`/${k}`))
+  const key = (path: string) => (path.endsWith(`/loadouts.mcp.json`) ? 'loadouts.mcp.json' : `loadouts/${path.slice(path.lastIndexOf('/') + 1)}`)
   on('fs.list', () => ({ value: [...w.files.keys()].filter(k => k.startsWith('loadouts/')).map(k => ({ name: k.slice(9), kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })) }))
   on('fs.read', ($, e) => {
     const k = at(e.path)
     return k ? { value: w.files.get(k)! } : { deny: 'ENOENT' }
   })
-  on('fs.write', ($, e) => (w.files.set(e.path.slice(e.path.lastIndexOf('/') + 1), e.text), { value: undefined }))
+  on('fs.write', ($, e) => (w.isReadOnly && key(e.path) !== 'loadouts.mcp.json' ? { deny: 'EACCES' } : (w.files.set(key(e.path), e.text), { value: undefined })))
+  on('fs.exists', ($, e) => ({ value: at(e.path) !== undefined }))
+  on('ui.toast', ($, e) => (w.toasts.push(e.text), { value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('ui.close', ($, e) => (w.closed.push(e.id), { value: undefined }))
   on('ui.invalidate', ($, e) => (w.invalidated.push(e.event), { value: undefined }))
@@ -231,7 +236,7 @@ describe('the picker', () => {
     for (const [surface, before] of [['terminal', '  supabase'], ['desktop', '● supabase']] as const) {
       await loadout($)
       const ui = await $.ui.mount({ ...PANE, surface })
-      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['  nextjs', before])
+      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['  nextjs', before, 'Save as loadout'])
       expect((await ui.find({ type: 'Text', text: /next-devtools/ }))?.text).toBe('  skills: nextjs-best-practices · servers: next-devtools')
       await ui.press({ key: 'supabase' })
       expect((await check($, tool('supabase'))).decision).toBe('allow')
@@ -239,5 +244,42 @@ describe('the picker', () => {
       expect(w.status).toBe('loadout: supabase')
       await ui.unmount()
     }
+  })
+
+  test('Save as loadout writes the equipped loadout to a new, dated loadout file, which the list then shows, on every surface', async ($, on) => {
+    const w = world(on)
+    await loadout($, 'supabase')
+    await loadout($)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await ui.press({ key: 'save' })
+    await ui.unmount()
+
+    const file = [...w.files.keys()].find(k => /^loadouts\/loadout-\d{8}-\d{6}\.json$/.test(k))
+    expect(file).toBeDefined()
+    const name = file!.slice(9, -5)
+    expect(JSON.parse(w.files.get(file!)!)).toEqual({ name, skills: SUPABASE.skills, mcpServers: SUPABASE.mcpServers, instructions: SUPABASE.instructions })
+    expect(w.toasts).toEqual([`Saved ${name}`])
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const again = await $.ui.mount({ ...PANE, surface })
+      expect((await again.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual([`  ${name}`, '  nextjs', '● supabase', 'Save as loadout'])
+      await again.unmount()
+    }
+    expect(await loadout($)).toContain(`${name}   skills: supabase:supabase, supabase:supabase-postgres-best-practices · servers: supabase`)
+    // It is a loadout like any other: equipping it puts the same set in effect.
+    expect(await loadout($, name)).toBe(`Unequipped supabase; equipped ${name} in /work/app.`)
+    expect((await check($, tool('supabase'))).decision).toBe('allow')
+    expect(await prompt($)).toContain('Its instructions: Run SQL through execute_sql.')
+  })
+
+  test('a capture that cannot be written is logged, toasts nothing and adds no loadout', async ($, on) => {
+    const w = world(on)
+    w.isReadOnly = true
+    await loadout($)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await ui.press({ key: 'save' })
+    await ui.unmount()
+    expect(w.logs).toEqual([expect.stringContaining('could not save the loadout (')])
+    expect(w.toasts).toEqual([])
+    expect([...w.files.keys()].filter(k => k.startsWith('loadouts/')).sort()).toEqual(['loadouts/nextjs.json', 'loadouts/supabase.json'])
   })
 })

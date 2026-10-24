@@ -23,7 +23,7 @@ Built and tested on Claude Code 2.1.310.
 
 ## Loadouts
 
-One JSON file per loadout in the mod's `loadouts/` folder. Add a file or edit one; the mod reads the folder each time it's used.
+One JSON file per loadout in the mod's `loadouts/` folder. Add a file or edit one, then run `/loadout <name>`: the gates read the folder on every call, but Claude's instructions note, its skill listing and the server list are refreshed only when you equip (see Limits).
 
 ```json
 {
@@ -49,7 +49,7 @@ The mod ships two examples, `supabase` and `nextjs` (the `next-devtools-mcp` ser
 
 | Command | What it does |
 | --- | --- |
-| `/loadout` | Opens the picker: every loadout, `●` on the one equipped in this project, its skills and servers beneath. Enter (or a click) equips one and closes the picker; Tab or the arrow keys move between rows |
+| `/loadout` | Opens the picker: every loadout, `●` on the one equipped in this project, its skills and servers beneath. Enter (or a click) equips one and closes the picker; Tab or the arrow keys move between rows. **Save as loadout**, at the bottom, writes what's equipped here (its skills, servers and instructions, or nothing if no loadout is equipped) to a new file, `loadouts/loadout-<date>-<time>.json`. A toast confirms it, and the list shows it at once. To rename it, change its `name` in the file |
 | `/loadout <name>` | Equips that loadout in this project (the project root), remembered across sessions |
 
 Claude has one tool, `mcp__loadouts__equip`, that does the same as `/loadout <name>`. The status line shows `loadout: <name>`.
@@ -57,7 +57,7 @@ Claude has one tool, `mcp__loadouts__equip`, that does the same as `/loadout <na
 ## How it works
 
 - **A loadout only manages what it names.** A skill or server some loadout names is on only while that loadout is equipped, and with no loadout equipped all of them are off. Skills, servers and tools that no loadout names are left alone.
-- **Every loadout's servers are loaded; the gate decides.** The mod writes all of them to `loadouts.mcp.json`, which its manifest names, so the servers join at the start. A call to a server of a loadout that isn't equipped is refused before it runs. So is a read of its MCP resources (`ReadMcpResourceTool` and the other resource tools, matched by the server they name). Equipping changes the gate, not the server list, so it never needs a reload.
+- **Every loadout's servers are loaded; the gate decides.** The mod writes all of them to `loadouts.mcp.json`, which its manifest names, so the servers join at the start. A call to a server of a loadout that isn't equipped is refused before it runs. So is a read of its MCP resources (`ReadMcpResourceTool` and the other resource tools, matched by the server they name). Equipping changes the gate, not the server list, so it needs no reload unless a loadout's `mcpServers` changed since the list was last written (the first bullet under Limits).
   - A resource listing that names no server is always refused, since it would reach every server; Claude names one and retries.
   - If the check itself fails, a call to a loadout server is refused too.
 - **Skills.** The skills of loadouts that aren't equipped are left out of the skill listing Claude reads, the listing already in the conversation included. A call to one through the Skill tool is refused, and so is a typed `/name`.
@@ -66,13 +66,14 @@ Claude has one tool, `mcp__loadouts__equip`, that does the same as `/loadout <na
 ## What it can reach
 
     ❯ ./register.tsx hooks: session.start, tool.check, tool.call{tool=mcp__loadouts__equip}, skill.prompt, prompt.attachment{type=skill_listing}, prompt.section{name=env_info_simple}, ui.render{component=Pane, requestId=loadouts}, command.run{command=loadout}
-    ❯ ./register.tsx calls: $.clock.after (via reload), $.command.register, $.command.run (via reload), $.fs.list (via load), $.fs.read (via load, sync), $.fs.write (via sync), $.session.root (via equip, equipped), $.store.get (via get), $.store.set (via equip), $.tool.register, $.ui.close, $.ui.invalidate (via equip), $.ui.log, $.ui.open, $.ui.resolve, $.ui.status
+    ❯ ./register.tsx calls: $.clock.after (via reload), $.command.register, $.command.run (via reload), $.fs.exists (via capture), $.fs.list (via load), $.fs.read (via load, sync), $.fs.write (via capture, sync), $.session.root (via equip, equipped), $.store.get (via get), $.store.set (via equip), $.tool.register, $.ui.close, $.ui.invalidate, $.ui.log, $.ui.open (via picker), $.ui.resolve, $.ui.status, $.ui.toast
 
-It reads its own `loadouts/` folder and writes one file, `loadouts.mcp.json` in its own folder. Its store holds each project root's equipped loadout.
+It reads its own `loadouts/` folder and writes `loadouts.mcp.json` in its own folder, plus a new file in `loadouts/` each time you press Save as loadout. Its store holds each project root's equipped loadout.
 
 ## Limits
 
-- **Adding or changing a loadout's servers takes a reload, which the mod runs.** Claude Code reads a plugin's server list only when it loads the plugin, and saving a loadout file reloads nothing by itself. The mod rewrites the list at each start, and again when you equip after editing a loadout's `mcpServers`, then queues `/reload-plugins`. After `/loadout <name>` that reload runs as soon as the command ends, and the new server connects: checked live with a server added mid-session. If Claude Code refuses the reload, the mod logs a line asking you to run `/reload-plugins`. Editing skills or instructions takes effect at once.
+- **Adding or changing a loadout's servers takes a reload, which the mod runs.** Claude Code reads a plugin's server list only when it loads the plugin, and saving a loadout file reloads nothing by itself. The mod rewrites the list at each start, and again when you equip after editing a loadout's `mcpServers`, then queues `/reload-plugins`. After `/loadout <name>` that reload runs as soon as the command ends, and the new server connects: checked live with a server added mid-session. If Claude Code refuses the reload, the mod logs a line asking you to run `/reload-plugins`.
+- **Other edits reach Claude at the next equip.** An edited `skills` list or `instructions`, or a new loadout file, reaches the Skill-tool and `/name` gates at once. Claude's instructions note and its skill listing change only at the next equip or the next session, so run `/loadout <name>` after editing.
 - **An unequipped server stays connected.** Its tools are still listed for Claude, behind tool search; every call to them is refused, and the system prompt says they're off.
 - **A loadout server takes over another server with the same URL.** Claude Code runs one server per URL. With the `supabase` example, equipped or not, the official Supabase plugin's `plugin:supabase:supabase` server doesn't load, and `/mcp` shows the claude.ai Supabase connector as hidden: same URL as `plugin:loadouts:supabase`. That keeps Supabase behind the loadout's gate. Keep the Supabase plugin enabled, since the example's skills are its own, and sign the loadout's server in once: `/mcp` → `plugin:loadouts:supabase` → Authenticate.
 - **The loadout files live in the mod's folder.** Installed from GitHub, that folder is a copy, and an update replaces it: keep your loadouts in a clone of the repository, installed as a folder marketplace (`claude plugin marketplace add <folder>`), and edits take effect with no reinstall.

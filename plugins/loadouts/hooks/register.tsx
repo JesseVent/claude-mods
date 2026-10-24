@@ -165,6 +165,25 @@ async function equip($: Engine, name: string) {
   return was && was !== name ? `Unequipped ${was}; equipped ${name} in ${root}.` : `Equipped ${name} in ${root}.`
 }
 
+const pad = (n: number) => String(n).padStart(2, '0')
+/** `loadout-20261024-151830`: the capture's moment in local time, within the name rules. */
+const stamp = (d: Date) => `loadout-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+
+/** Saves what is in effect here, the equipped loadout's skills, servers and instructions, as a new loadout file. */
+async function capture($: Engine) {
+  const { loadouts } = await load($)
+  const now = await equipped($, loadouts)
+  const name = stamp(new Date())
+  const path = `${$.plugin.root}/${DIR}/${name}.json`
+  if (loadouts.some(l => l.name === name) || (await $.fs.exists(path))) throw new Error(`${name} already exists`)
+  const loadout: Loadout = { name, skills: now?.skills ?? [], mcpServers: now?.mcpServers ?? {}, instructions: now?.instructions ?? '' }
+  await $.fs.write(path, `${JSON.stringify(loadout, null, 2)}\n`)
+  return name
+}
+
+/** Opens the picker, or resizes the open one, to fit `count` loadouts: two rows each, the button and the hint. */
+const picker = ($: Engine, count: number) => $.ui.open({ id: PANE, title: 'Loadouts', focus: true, closeOnEscape: true, rows: count * 2 + 2 })
+
 /** What /loadout records when it opens the picker: no ●, since a pick in the pane would leave it stale in the transcript. */
 async function summary($: Engine) {
   const { loadouts, problems } = await load($)
@@ -224,7 +243,8 @@ export const register: Register = on => {
     return n ? { text: [r.text, n].filter(Boolean).join('\n\n') } : r
   }).catch(($, e, next) => next(e))
 
-  // The picker: a row per loadout, ● on the one equipped here, its skills and servers beneath. Enter equips and closes.
+  // The picker: a row per loadout, ● on the one equipped here, its skills and servers beneath. Enter equips and closes;
+  // Save as loadout copies what's equipped into a new file, which the list then shows, and the pane stays open.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const { loadouts } = await load($)
@@ -232,6 +252,15 @@ export const register: Register = on => {
     const pick = async (name: string) => {
       await equip($, name)
       await $.ui.close({ id: PANE })
+    }
+    const save = async () => {
+      try {
+        $.ui.toast(`Saved ${await capture($)}`)
+        await picker($, loadouts.length + 1)
+      } catch (err) {
+        $.ui.log(`could not save the loadout (${String(err)})`)
+      }
+      $.ui.invalidate('ui.render')
     }
     const rows = []
     for (const l of loadouts) {
@@ -241,6 +270,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {rows.length ? rows : <Text dimColor>No loadouts in {`${$.plugin.root}/${DIR}`}</Text>}
+        <Button key="save" label="Save as loadout" onPress={save} />
         <Text dimColor>Enter equips · Esc closes</Text>
       </Box>
     )
@@ -249,8 +279,7 @@ export const register: Register = on => {
   on('command.run', { command: 'loadout' }, async ($, e) => {
     const name = e.args.trim()
     if (name) return { text: await equip($, name) }
-    const { loadouts } = await load($)
-    await $.ui.open({ id: PANE, title: 'Loadouts', focus: true, closeOnEscape: true, rows: loadouts.length * 2 + 1 })
+    await picker($, (await load($)).loadouts.length)
     return { text: await summary($) }
   })
 }
