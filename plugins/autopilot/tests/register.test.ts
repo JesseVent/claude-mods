@@ -28,7 +28,7 @@ type WorldOptions = {
 }
 function world(on: On, o: WorldOptions = {}) {
   const held: (() => void)[] = []
-  const w = { forks: [] as string[], rewrites: [] as string[], rewritePrompts: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on), release: () => held.splice(0).forEach(go => go()) }
+  const w = { forks: [] as string[], rewrites: [] as string[], rewritePrompts: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], logs: [] as string[], files: new Map<string, string>(), clock: mock.clock(on), release: () => held.splice(0).forEach(go => go()) }
   const grilled = (prompt: string) => (w.grills.push(prompt), said(o.grill?.(prompt) ?? '{"ready":true}'))
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
     const q = e.questions[0]!.question
@@ -57,7 +57,7 @@ function world(on: On, o: WorldOptions = {}) {
     return o.hold ? new Promise<{ text: string }>(go => held.push(() => go({ text: e.text }))) : { text: e.text }
   })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('ui.log', () => ({ value: undefined }))
+  on('ui.log', ($, e) => (w.logs.push(e.text), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: true as const, channel: 'terminal_bell' as const } }))
   on('tool.check', () => ({ decision: o.engine ?? 'ask', reason: 'no rule allows it' }))
@@ -75,6 +75,7 @@ const type = ($: { prompt: { submit: unknown } }, text: string, kind = 'composer
   ($.prompt.submit as (e: unknown) => Promise<{ text: string }>)({ text, wait: false, origin: { kind }, turnId }).then(r => r.text)
 const check = ($: { tool: { check: unknown } }, tool: string, input: unknown) =>
   ($.tool.check as (e: unknown) => Promise<Check>)({ tool, input, tool_use_id: 'u1' })
+const run = ($: { tool: { call: unknown } }, input: unknown) => ($.tool.call as (e: unknown) => Promise<unknown>)(input)
 const ended = ($: { turn: { complete: unknown } }, reason: 'answer' | 'aborted' | 'error' = 'answer') =>
   ($.turn.complete as (e: unknown) => Promise<unknown>)({ answer: 'did it', durationMs: 1, isAborted: reason === 'aborted', turnId: 't1', reason })
 
@@ -121,7 +122,7 @@ describe('on by default', () => {
     expect(row(w)).toMatchObject({ goal: 'add a line', turns: 1, status: 'driving' })
   })
 
-  test('after DONE it stays armed, and the next prompt, rewritten beside Claude\'s last reply, drives again', async ($, on) => {
+  test('after DONE it stays armed, and the next prompt drives again as typed', async ($, on) => {
     let reply = 'DONE: line added and committed; the push waits on you'
     const w = world(on, { fork: () => reply })
     await start($)
@@ -131,8 +132,9 @@ describe('on by default', () => {
     await ended($)
     expect(w.forks).toHaveLength(1)
     reply = 'Run bun test.'
-    expect(await type($, 'now lint')).toBe('rewritten: now lint')
-    expect(w.rewritePrompts.at(-1)).toBe('<last_reply>did it</last_reply>\n\n<prompt>now lint</prompt>')
+    expect(await type($, 'now lint')).toBe('now lint')
+    expect(w.rewrites).toEqual(['add a line'])
+    expect(row(w).goal).toBe('now lint')
     expect(w.forks).toHaveLength(1)
     await ended($)
     await w.clock.settle()
@@ -239,6 +241,35 @@ describe('permission asks', () => {
     expect((await check($, 'Bash', { command: 'git push -u origin feat/x' })).decision).toBe('allow')
   })
 
+  test('the decider sees the latest calls and what they returned, a subagent\'s included', async ($, on) => {
+    const w = world(on, { fork: () => ALLOW })
+    on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false }, text: '[feat/x 1a2b3c] add tests' }))
+    await drive($, 'add tests')
+    await run($, { tool: 'Bash', command: 'git commit -m "add tests"' })
+    await run($, { tool: 'Bash', command: 'git log -1', agentId: 'a1' })
+    await check($, 'Bash', { command: 'git push -u origin feat/x' })
+    expect(w.forks.at(-1)).toContain('<recent>Bash {"command":"git commit -m \\"add tests\\""} → [feat/x 1a2b3c] add tests\nsubagent Bash {"command":"git log -1"} → [feat/x 1a2b3c] add tests</recent>')
+  })
+
+  test('an ask it leaves to the person is logged', async ($, on) => {
+    const w = world(on, { fork: () => '{"decision":"ask","reason":"which bucket is meant"}' })
+    await drive($, 'add tests')
+    await check($, 'Bash', { command: 'aws s3 rm s3://x' })
+    expect(w.logs).toContain('left Bash to you: which bucket is meant')
+  })
+
+  test('while the person typed in the last 10 minutes, questions and plans go to them', async ($, on) => {
+    const w = world(on, { fork: () => 'Take Postgres: the repo already uses it.' })
+    await start($)
+    await type($, 'add a database')
+    expect((await check($, 'AskUserQuestion', { questions: [{ question: 'Which database?' }] })).decision).toBe('ask')
+    expect((await check($, 'EnterPlanMode', {})).decision).toBe('ask')
+    expect(w.forks).toEqual([])
+    await w.clock.advance(11 * 60_000)
+    expect((await check($, 'AskUserQuestion', { questions: [{ question: 'Which database?' }] })).reason).toContain('Take Postgres')
+    expect((await check($, 'EnterPlanMode', {})).decision).toBe('deny')
+  })
+
   test('questions are answered from the session, and plan mode is skipped', async ($, on) => {
     world(on, { fork: () => 'Take Postgres: the repo already uses it.' })
     await drive($, 'add a database')
@@ -258,6 +289,7 @@ describe('driving', () => {
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add tests', 'Now run the tests.'])
     expect(JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!)).toMatchObject({ turns: 1 })
+    expect(w.forks[0]).toContain('Leave pushing and pull requests to the person')
   })
 
   test('DONE stops it without sending anything, its summary on one line', async ($, on) => {
@@ -300,6 +332,33 @@ describe('driving', () => {
     await w.clock.settle()
     expect(w.submitted.at(-1)).toBe('Read verify.tsv.')
     expect(row(w)).toMatchObject({ status: 'driving', turns: 1 })
+  })
+
+  test('/drive on while a step is still queued sends no second one', async ($, on) => {
+    const w = world(on, { fork: () => 'Now run the tests.', hold: true })
+    await drive($, 'add tests')
+    await w.clock.settle()
+    await drive($, 'on')
+    await w.clock.settle()
+    expect(w.submitted).toEqual(['rewritten: add tests'])
+    w.release()
+    await w.clock.settle()
+  })
+
+  test('the turn cap waits for a queued step: a notification turn meanwhile doesn\'t stop it', { options: { maxTurns: 1 } }, async ($, on) => {
+    const w = world(on, { fork: () => 'Keep going.', hold: true })
+    await drive($, 'add tests')
+    await w.clock.settle()
+    w.release()
+    await w.clock.settle()
+    await ended($)
+    await ended($)
+    expect(row(w).status).toBe('driving')
+    w.release()
+    await w.clock.settle()
+    await ended($)
+    expect(row(w).status).toBe('stopped at the 1-turn cap')
+    expect(w.submitted).toEqual(['rewritten: add tests', 'Keep going.'])
   })
 
   test('it stops at the turn cap', { options: { maxTurns: 1 } }, async ($, on) => {
