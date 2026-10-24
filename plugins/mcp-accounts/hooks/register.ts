@@ -108,6 +108,9 @@ function target(tool: string, input: unknown) {
   return m ? { server: m[1]!, name: '' } : undefined
 }
 
+/** A resource listing that names no server: it reaches every server, blocked accounts' included. */
+const unnamed = (tool: string, input: unknown) => tool === 'ListMcpResourcesTool' && !(input as { server?: unknown } | null)?.server
+
 async function list($: Engine) {
   const accounts = await get<Accounts>($, 'accounts', {})
   const rows: string[] = []
@@ -185,10 +188,14 @@ export const register: Register = on => {
 
   // Refused, never waved through, when the check itself fails: the call could reach the wrong workspace.
   on('tool.check', async ($, e, next) => {
+    // A service with two accounts always has one blocked.
+    if (unnamed(e.tool, e.input) && Object.values(await get<Accounts>($, 'accounts', {})).some(l => l.length > 1)) {
+      return { decision: 'deny', reason: "Name a server: listing every server's resources would include MCP accounts this project doesn't use." }
+    }
     const t = target(e.tool, e.input)
     const reason = t && (await refusal($, t.server, t.name))
     return reason ? { decision: 'deny', reason } : next(e)
-  }).catch(($, e, next) => (target(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
+  }).catch(($, e, next) => (target(e.tool, e.input) || unnamed(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
 
   on('prompt.section', { name: 'env_info_simple' }, async ($, e, next) => {
     const r = await next(e)

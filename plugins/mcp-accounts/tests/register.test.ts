@@ -119,8 +119,16 @@ describe('the gate', () => {
     expect((await check($, 'ReadMcpResourceDirTool', { server: 'plugin_mcp-accounts_slack-acme', uri: 'x' })).decision).toBe('deny')
     expect((await check($, 'ListMcpResourcesTool', { server: 'plugin:mcp-accounts:slack-acme' })).decision).toBe('deny')
     expect((await read('plugin:mcp-accounts:slack-foo')).decision).toBe('allow')
-    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('allow')
     expect((await read('plugin:slack:slack')).decision).toBe('allow')
+    expect(await check($, 'ListMcpResourcesTool', {})).toMatchObject({ decision: 'deny', reason: expect.stringContaining('Name a server') })
+    expect((await check($, 'ListMcpResourcesTool', { server: '' })).decision).toBe('deny')
+  })
+
+  test("listing every server's resources is left to the engine while no account is blocked", async ($, on) => {
+    world(on)
+    await account($, 'add slack acme')
+    await account($, 'add supabase personal')
+    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('allow')
   })
 
   test('signing in any account, and every other tool, is left to the engine', async ($, on) => {
