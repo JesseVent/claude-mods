@@ -25,7 +25,7 @@ type WorldOptions = {
   engine?: Decision
 }
 function world(on: On, o: WorldOptions = {}) {
-  const w = { forks: [] as string[], rewrites: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
+  const w = { forks: [] as string[], rewrites: [] as string[], rewritePrompts: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
   const grilled = (prompt: string) => (w.grills.push(prompt), said(o.grill?.(prompt) ?? '{"ready":true}'))
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
     const q = e.questions[0]!.question
@@ -38,7 +38,11 @@ function world(on: On, o: WorldOptions = {}) {
   on('env.get', () => ({ value: '/home/me' }))
   on('fs.write', ($, e) => (w.files.set(e.path, e.text), { value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: `${o.branch ?? 'feat/x'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('model.complete', ($, e) => (e.prompt.includes('<answers>') ? grilled(e.prompt) : (w.rewrites.push(e.prompt), said(`rewritten: ${e.prompt}`))))
+  on('model.complete', ($, e) => {
+    if (e.prompt.includes('<answers>')) return grilled(e.prompt)
+    const typed = /<prompt>([\s\S]*)<\/prompt>/.exec(e.prompt)?.[1] ?? e.prompt
+    return (w.rewritePrompts.push(e.prompt), w.rewrites.push(typed), said(`rewritten: ${typed}`))
+  })
   on('model.fork', ($, e) => {
     if (e.prompt.includes('<answers>')) return o.fresh ? { value: { isAnswered: false as const, reason: 'nothing-to-fork' as const } } : grilled(e.prompt)
     w.forks.push(e.prompt)
@@ -77,7 +81,7 @@ describe('engaging', () => {
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add tests'])
     const row = JSON.parse(w.files.get('/home/me/.claude/autopilot/s1.json')!) as { goal: string; status: string }
-    expect(row).toMatchObject({ goal: 'rewritten: add tests', status: 'driving' })
+    expect(row).toMatchObject({ goal: 'add tests', status: 'driving' })
   })
 
   test('with autoEngage off, typed prompts are rewritten only after /drive, and its own prompts never', { options: { autoEngage: false } }, async ($, on) => {
@@ -104,13 +108,14 @@ describe('on by default', () => {
     const w = world(on, { fork: () => 'Commit notes.txt on feat/tides.' })
     await start($)
     expect(await type($, 'add a line')).toBe('rewritten: add a line')
+    expect(w.rewritePrompts[0]).toBe('<prompt>add a line</prompt>')
     await ended($)
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add a line', 'Commit notes.txt on feat/tides.'])
-    expect(row(w)).toMatchObject({ goal: 'rewritten: add a line', turns: 1, status: 'driving' })
+    expect(row(w)).toMatchObject({ goal: 'add a line', turns: 1, status: 'driving' })
   })
 
-  test('after DONE it stays armed, and the next prompt drives again', async ($, on) => {
+  test('after DONE it stays armed, and the next prompt, rewritten beside Claude\'s last reply, drives again', async ($, on) => {
     let reply = 'DONE: line added and committed; the push waits on you'
     const w = world(on, { fork: () => reply })
     await start($)
@@ -121,6 +126,8 @@ describe('on by default', () => {
     expect(w.forks).toHaveLength(1)
     reply = 'Run bun test.'
     expect(await type($, 'now lint')).toBe('rewritten: now lint')
+    expect(w.rewritePrompts.at(-1)).toBe('<last_reply>did it</last_reply>\n\n<prompt>now lint</prompt>')
+    expect(w.forks).toHaveLength(1)
     await ended($)
     await w.clock.settle()
     expect(w.submitted.at(-1)).toBe('Run bun test.')
@@ -145,14 +152,14 @@ describe('on by default', () => {
     await ended($)
     await w.clock.settle()
     expect(w.submitted.at(-1)).toBe('Keep going.')
-    expect(row(w).goal).toBe('rewritten: do it differently')
+    expect(row(w).goal).toBe('do it differently')
   })
 
   test('a prompt typed mid-turn with no goal becomes the goal', async ($, on) => {
     const w = world(on)
     await start($)
     await type($, 'add a line', 'composer', 't0')
-    expect(row(w).goal).toBe('rewritten: add a line')
+    expect(row(w).goal).toBe('add a line')
   })
 })
 
@@ -180,6 +187,7 @@ describe('asking first', () => {
     await start($)
     expect(await type($, 'make it faster')).toBe('rewritten: make it faster')
     expect(w.asked).toEqual(['Which page?'])
+    expect(w.rewrites).toEqual(['make it faster'])
   })
 })
 
@@ -276,7 +284,7 @@ describe('driving', () => {
     expect(w.submitted).toEqual(['rewritten: add tests'])
     await drive($, 'on')
     await w.clock.settle()
-    expect(w.submitted.at(-1)).toBe('Carry on toward the goal: rewritten: add tests')
+    expect(w.submitted.at(-1)).toBe('Carry on toward the goal: add tests')
   })
 
   for (const [why, reason, reply] of [

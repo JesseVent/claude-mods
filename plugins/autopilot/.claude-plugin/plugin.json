@@ -1,6 +1,6 @@
 {
   "name": "autopilot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Drives your Claude Code sessions on its own: asks you pointed questions first when a prompt leaves the goal, constraints or check unclear, rewrites the prompts you type, decides permission asks and Claude's questions from the whole conversation, and after each turn sends the practical next step (fix, verify, commit, push, open the PR) until only you can decide what is left.",
   "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
   "repository": "https://github.com/JesseVent/claude-mods",
@@ -11,7 +11,7 @@
     "model": {
       "type": "string",
       "title": "Rewrite model",
-      "description": "The model that rewrites the prompts you type, and judges whether a session's first prompt needs questions: an alias (sonnet, haiku, opus) or a full model id. Permission asks, questions and the next step are decided by the session's own model over the whole conversation.",
+      "description": "The model that rewrites the prompts you type (with Claude's last reply beside them), and judges whether a session's first prompt needs questions: an alias (sonnet, haiku, opus) or a full model id. Permission asks, questions and the next step are decided by the session's own model over the whole conversation.",
       "default": "sonnet"
     },
     "maxTurns": {
