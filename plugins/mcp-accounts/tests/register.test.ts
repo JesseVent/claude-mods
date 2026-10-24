@@ -10,8 +10,7 @@ type Check = { decision: 'allow' | 'ask' | 'deny'; reason?: string }
  * an engine that allows every tool call, and servers that answer `mcp.connect` as needing sign-in.
  */
 function world(on: On) {
-  const w = { root: '/work/app', store: new Map<string, unknown>(), files: new Map<string, string>(), loaded: [] as string[], closed: [] as string[], reloads: 0, status: undefined as string | undefined, clock: mock.clock(on) }
-  on('tool.list', () => ({ value: w.loaded.map(name => ({ name })) as never }))
+  const w = { root: '/work/app', store: new Map<string, unknown>(), files: new Map<string, string>(), closed: [] as string[], reloads: 0, status: undefined as string | undefined, clock: mock.clock(on) }
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('ui.close', ($, e) => (w.closed.push(e.id), { value: undefined }))
   on('session.root', () => ({ value: w.root }))
@@ -120,8 +119,7 @@ describe('the gate', () => {
   })
 
   test('the MCP resource tools are held to the same account, by the server they name', async ($, on) => {
-    const w = world(on)
-    w.loaded = [tool('slack-acme'), tool('slack-foo')]
+    world(on)
     await account($, 'add slack acme')
     await account($, 'add slack foo')
     await account($, 'slack foo')
@@ -135,24 +133,21 @@ describe('the gate', () => {
     expect((await check($, 'ListMcpResourcesTool', { server: '' })).decision).toBe('deny')
   })
 
-  test("listing every server's resources is left to the engine while no loaded account is blocked", async ($, on) => {
-    const w = world(on)
-    w.loaded = [tool('slack-acme'), tool('supabase-personal', 'list_projects')]
+  test("a listing of every server's resources is refused whatever the accounts, even with none", async ($, on) => {
+    world(on)
+    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('deny')
     await account($, 'add slack acme')
-    await account($, 'add supabase personal')
-    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('allow')
+    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('deny')
+    expect((await check($, 'ListMcpResourcesTool', { server: 'plugin:slack:slack' })).decision).toBe('allow')
   })
 
-  test('a removed account still loaded until the reload keeps unnamed listing refused', async ($, on) => {
-    const w = world(on)
-    w.loaded = [tool('slack-acme'), tool('slack-foo')]
+  test('a removed account is refused before the reload drops its server', async ($, on) => {
+    world(on)
     await account($, 'add slack acme')
     await account($, 'add slack foo')
     await account($, 'remove slack foo')
     expect((await check($, tool('slack-foo'))).decision).toBe('deny')
-    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('deny')
-    w.loaded = [tool('slack-acme')]
-    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('allow')
+    expect((await check($, 'ReadMcpResourceTool', { server: 'plugin:mcp-accounts:slack-foo', uri: 'x' })).decision).toBe('deny')
   })
 
   test('signing in any account, and every other tool, is left to the engine', async ($, on) => {

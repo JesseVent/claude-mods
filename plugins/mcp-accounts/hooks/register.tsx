@@ -108,15 +108,12 @@ function target(tool: string, input: unknown) {
   return m ? { server: m[1]!, name: '' } : undefined
 }
 
-/** A resource listing that names no server: it reaches every server, blocked accounts' included. */
+/**
+ * A resource listing that names no server reaches every server, so it is always refused: whether one of this mod's
+ * is loaded for an account not in use can't be told reliably (a removed account's stays until the reload, and a
+ * server with resources but no tools leaves no trace in the tool list).
+ */
 const unnamed = (tool: string, input: unknown) => tool === 'ListMcpResourcesTool' && !(input as { server?: unknown } | null)?.server
-
-/** Whether a server of this mod that is loaded now belongs to an account this project doesn't use: read off the tools, since a removed account's server stays until the reload. */
-async function blocked($: Engine) {
-  const loaded = new Set((await $.tool.list()).filter(t => t.name.startsWith(PREFIX)).map(t => t.name.slice(PREFIX.length).split('__')[0]!))
-  for (const server of loaded) if (await refusal($, server, '')) return true
-  return false
-}
 
 async function list($: Engine) {
   const accounts = await get<Accounts>($, 'accounts', {})
@@ -206,13 +203,13 @@ export const register: Register = on => {
 
   // Refused, never waved through, when the check itself fails: the call could reach the wrong workspace.
   on('tool.check', async ($, e, next) => {
-    if (unnamed(e.tool, e.input) && (await blocked($))) {
-      return { decision: 'deny', reason: "Name a server: listing every server's resources would include MCP accounts this project doesn't use." }
+    if (unnamed(e.tool, e.input)) {
+      return { decision: 'deny', reason: "Name a server: mcp-accounts refuses a listing of every server's resources, which could include an MCP account this project doesn't use." }
     }
     const t = target(e.tool, e.input)
     const reason = t && (await refusal($, t.server, t.name))
     return reason ? { decision: 'deny', reason } : next(e)
-  }).catch(($, e, next) => (target(e.tool, e.input) || unnamed(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
+  }).catch(($, e, next) => (target(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
 
   // The picker: each service, then a button per account, ● on the one this project uses; a press switches and closes it.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
