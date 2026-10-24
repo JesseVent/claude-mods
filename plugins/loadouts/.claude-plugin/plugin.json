@@ -1,0 +1,10 @@
+{
+  "name": "loadouts",
+  "version": "0.1.0",
+  "description": "Requip for Claude Code: named loadouts of skills, MCP servers and instructions, one equipped per project from the /loadout picker or by Claude itself, the rest switched off. Switching never needs a restart.",
+  "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
+  "repository": "https://github.com/JesseVent/claude-mods",
+  "license": "MIT",
+  "keywords": ["mods", "loadouts", "skills", "mcp", "instructions"],
+  "mcpServers": "./loadouts.mcp.json"
+}

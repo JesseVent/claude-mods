@@ -1,0 +1,8 @@
+{
+  "name": "supabase",
+  "skills": ["supabase:supabase", "supabase:supabase-postgres-best-practices"],
+  "mcpServers": {
+    "supabase": { "type": "http", "url": "https://mcp.supabase.com/mcp" }
+  },
+  "instructions": "This project's backend is Supabase. Use the supabase MCP server's tools for the database, auth and storage: list the tables before writing a query, run SQL through its execute_sql tool rather than psql, and read its advisors after a schema change. Keep Row Level Security on for every user-facing table."
+}
