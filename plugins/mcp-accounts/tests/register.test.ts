@@ -13,6 +13,7 @@ function world(on: On) {
   const w = { root: '/work/app', store: new Map<string, unknown>(), files: new Map<string, string>(), closed: [] as string[], reloads: 0, status: undefined as string | undefined, clock: mock.clock(on) }
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('ui.close', ($, e) => (w.closed.push(e.id), { value: undefined }))
+  on('ui.invalidate', () => ({ value: undefined }))
   on('session.root', () => ({ value: w.root }))
   on('store.get', ($, e) => ({ value: w.store.get(e.key) }))
   on('store.set', ($, e) => (w.store.set(e.key, e.value), { value: undefined }))
@@ -103,7 +104,7 @@ describe('the gate', () => {
     expect(await check($, tool('slack-acme'))).toMatchObject({ decision: 'deny', reason: expect.stringContaining('No slack account is chosen') })
     expect(await account($, 'slack foo')).toBe('slack → foo in /work/app.')
     expect((await check($, tool('slack-foo'))).decision).toBe('allow')
-    expect(await check($, tool('slack-acme'))).toMatchObject({ decision: 'deny', reason: expect.stringContaining('/account slack acme') })
+    expect(await check($, tool('slack-acme'))).toMatchObject({ decision: 'deny', reason: expect.stringContaining('add acme with /account slack foo acme') })
     expect(w.status).toBe('slack:foo')
   })
 
@@ -169,6 +170,9 @@ describe('telling Claude and the person', () => {
     await account($, 'add slack foo')
     const two = await $.prompt.section({ name: 'env_info_simple', text: 'Working directory: /work/app' })
     expect(two.text).toContain('slack has several accounts (acme, foo) and none is chosen')
+    await account($, 'slack acme foo')
+    const both = await $.prompt.section({ name: 'env_info_simple', text: 'Working directory: /work/app' })
+    expect(both.text).toContain('slack uses its acme and foo accounts in this project (the mcp__plugin_mcp-accounts_slack-acme__* and mcp__plugin_mcp-accounts_slack-foo__* tools): use the one the task names')
   })
 
   test('/account lists each account, which is in use, and how to sign it in', async ($, on) => {
@@ -180,7 +184,7 @@ describe('telling Claude and the person', () => {
     expect(await account($, 'supabase')).toContain('supabase: personal.')
   })
 
-  test('/account opens the picker; a press switches the project and closes it, on every surface', async ($, on) => {
+  test('/account opens the picker: + adds an account and stays open, a name uses it alone and closes, on every surface', async ($, on) => {
     const w = world(on)
     await account($, 'add slack acme')
     await account($, 'add slack foo')
@@ -188,13 +192,30 @@ describe('telling Claude and the person', () => {
     await account($, 'slack acme')
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
-      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['● acme', '  foo', '● personal'])
-      await ui.press({ key: 'slack-foo' })
+      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.label)).toEqual(['● acme', '−', '  foo', '+', '● personal'])
+      const closed = w.closed.length
+      await ui.press({ key: 'slack-foo+' })
       expect((await check($, tool('slack-foo'))).decision).toBe('allow')
+      expect((await check($, tool('slack-acme'))).decision).toBe('allow')
+      expect(w.status).toBe('slack:acme+foo · supabase:personal')
+      expect(w.closed).toHaveLength(closed)
+      await ui.press({ key: 'slack-foo' })
+      expect((await check($, tool('slack-acme'))).decision).toBe('deny')
       expect(w.closed.at(-1)).toBe('accounts')
       await account($, 'slack acme')
       await ui.unmount()
     }
+  })
+
+  test('/account <service> with several accounts uses them all, and the rest stay blocked', async ($, on) => {
+    const w = world(on)
+    for (const a of ['acme', 'foo', 'bar']) await account($, `add slack ${a}`)
+    expect(await account($, 'slack acme foo')).toBe('slack → acme and foo in /work/app.')
+    expect((await check($, tool('slack-acme'))).decision).toBe('allow')
+    expect((await check($, tool('slack-foo'))).decision).toBe('allow')
+    expect(await check($, tool('slack-bar'))).toMatchObject({ decision: 'deny', reason: expect.stringContaining('This project uses slack acme and foo, not bar') })
+    expect(w.status).toBe('slack:acme+foo')
+    expect(await account($, 'slack acme nope')).toContain("There's no slack account named nope")
   })
 
   test('servers joins the account onto a URL that already has a query', () => {

@@ -16,7 +16,7 @@ This repo includes four mods:
 - `secret-keeper` — hides pasted API keys from Claude and stores them in your macOS Keychain.
 - `context-compass` — shows the live budget, files in context, disk changes, helper agents, and more.
 - `autopilot` — asks pointed questions when a prompt is unclear, rewrites prompts, decides permission prompts, and keeps a goal moving across turns.
-- `mcp-accounts` — several logins for any MCP server (Slack workspaces, Supabase accounts), picked per project with `/account`, no restart.
+- `mcp-accounts` — several logins for any MCP server (Slack workspaces, Supabase accounts), one or many in use per project via `/account`, no restart.
 
 ## Quick install
 
