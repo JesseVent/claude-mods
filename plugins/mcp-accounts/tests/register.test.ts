@@ -29,7 +29,7 @@ function world(on: On) {
 
 const account = ($: { command: { run: unknown } }, args: string) =>
   ($.command.run as (a: unknown) => Promise<{ text: string }>)({ command: 'account', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } }).then(r => r.text)
-const check = ($: { tool: { check: unknown } }, tool: string) => ($.tool.check as (e: unknown) => Promise<Check>)({ tool, input: {}, tool_use_id: 'u1' })
+const check = ($: { tool: { check: unknown } }, tool: string, input: unknown = {}) => ($.tool.check as (e: unknown) => Promise<Check>)({ tool, input, tool_use_id: 'u1' })
 const start = ($: { session: { start: unknown } }) => ($.session.start as (e: unknown) => Promise<unknown>)({ cwd: '/work/app', surface: null, isInteractive: true })
 const written = (w: { files: Map<string, string> }) => {
   const [path, text] = [...w.files].find(([p]) => p.endsWith('/accounts.mcp.json'))!
@@ -107,6 +107,20 @@ describe('the gate', () => {
     expect((await check($, tool('slack-acme'))).decision).toBe('deny')
     w.root = '/work/app'
     expect((await check($, tool('slack-acme'))).decision).toBe('allow')
+  })
+
+  test('the MCP resource tools are held to the same account, by the server they name', async ($, on) => {
+    world(on)
+    await account($, 'add slack acme')
+    await account($, 'add slack foo')
+    await account($, 'slack foo')
+    const read = (server: string) => check($, 'ReadMcpResourceTool', { server, uri: 'slack://channels' })
+    expect(await read('plugin:mcp-accounts:slack-acme')).toMatchObject({ decision: 'deny', reason: expect.stringContaining('not acme') })
+    expect((await check($, 'ReadMcpResourceDirTool', { server: 'plugin_mcp-accounts_slack-acme', uri: 'x' })).decision).toBe('deny')
+    expect((await check($, 'ListMcpResourcesTool', { server: 'plugin:mcp-accounts:slack-acme' })).decision).toBe('deny')
+    expect((await read('plugin:mcp-accounts:slack-foo')).decision).toBe('allow')
+    expect((await check($, 'ListMcpResourcesTool', {})).decision).toBe('allow')
+    expect((await read('plugin:slack:slack')).decision).toBe('allow')
   })
 
   test('signing in any account, and every other tool, is left to the engine', async ($, on) => {

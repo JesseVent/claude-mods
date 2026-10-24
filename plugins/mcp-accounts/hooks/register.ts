@@ -84,9 +84,8 @@ async function note($: Engine) {
   return lines.length ? `MCP accounts (mcp-accounts): ${lines.join(' ')} A call to another account's tools is refused; only the person switches accounts.` : ''
 }
 
-/** Why a call to `tool` is refused, or undefined when it may go ahead. */
-async function refusal($: Engine, tool: string) {
-  const [server = '', name = ''] = tool.slice(PREFIX.length).split('__')
+/** Why a call reaching one of this mod's servers (`slack-foo`) through tool `name` is refused, or undefined when it may go ahead. */
+async function refusal($: Engine, server: string, name: string) {
   if (SIGN_IN.has(name)) return undefined
   const cut = server.indexOf('-')
   const service = server.slice(0, cut)
@@ -96,6 +95,17 @@ async function refusal($: Engine, tool: string) {
   return a
     ? `This project uses the ${a} ${service} account, not ${label}: use the ${PREFIX}${service}-${a}__* tools, or ask the person to switch with /account ${service} ${label}.`
     : `No ${service} account is chosen for this project: ask the person which to use; they pick it with /account ${service} <account>.`
+}
+
+/** The mod's server a call reaches: by its own tool name, or by the `server` the MCP resource tools take (`plugin:mcp-accounts:slack-foo`). */
+function target(tool: string, input: unknown) {
+  if (tool.startsWith(PREFIX)) {
+    const [server = '', name = ''] = tool.slice(PREFIX.length).split('__')
+    return { server, name }
+  }
+  const named = (input as { server?: unknown } | null)?.server
+  const m = typeof named === 'string' ? /^plugin[:_]mcp-accounts[:_](.+)$/.exec(named) : null
+  return m ? { server: m[1]!, name: '' } : undefined
 }
 
 async function list($: Engine) {
@@ -175,10 +185,10 @@ export const register: Register = on => {
 
   // Refused, never waved through, when the check itself fails: the call could reach the wrong workspace.
   on('tool.check', async ($, e, next) => {
-    if (!e.tool.startsWith(PREFIX)) return next(e)
-    const reason = await refusal($, e.tool)
+    const t = target(e.tool, e.input)
+    const reason = t && (await refusal($, t.server, t.name))
     return reason ? { decision: 'deny', reason } : next(e)
-  }).catch(($, e, next) => (e.tool.startsWith(PREFIX) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
+  }).catch(($, e, next) => (target(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
 
   on('prompt.section', { name: 'env_info_simple' }, async ($, e, next) => {
     const r = await next(e)
