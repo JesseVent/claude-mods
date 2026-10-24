@@ -11,7 +11,7 @@
     "model": {
       "type": "string",
       "title": "Rewrite model",
-      "description": "The model that rewrites a session's first prompt and judges whether it needs questions, before there is a conversation to read: an alias (sonnet, haiku, opus) or a full model id. Later rewrites, permission asks, questions and the next step are decided by the session's own model over the whole conversation.",
+      "description": "The model that rewrites the prompts you type (with Claude's last reply beside them), and judges whether a session's first prompt needs questions: an alias (sonnet, haiku, opus) or a full model id. Permission asks, questions and the next step are decided by the session's own model over the whole conversation.",
       "default": "sonnet"
     },
     "maxTurns": {
