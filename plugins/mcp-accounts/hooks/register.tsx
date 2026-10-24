@@ -28,7 +28,7 @@ const USAGE = `/account                                 list accounts; * marks t
 /account add <service> <account> [url]   add an account (the URL for a service other than ${Object.keys(BUILT_IN).join(' or ')})
 /account remove <service> <account>      remove one`
 
-const get = async <T>($: Engine, key: string, empty: T) => ((await $.store.get(key)) ?? empty) as T
+const get = async <T,>($: Engine, key: string, empty: T) => ((await $.store.get(key)) ?? empty) as T
 const services = async ($: Engine) => ({ ...BUILT_IN, ...(await get<Record<string, Service>>($, 'services', {})) })
 
 /** The account a service uses in this project: the one chosen here, else its only one. */
@@ -111,6 +111,13 @@ function target(tool: string, input: unknown) {
 /** A resource listing that names no server: it reaches every server, blocked accounts' included. */
 const unnamed = (tool: string, input: unknown) => tool === 'ListMcpResourcesTool' && !(input as { server?: unknown } | null)?.server
 
+/** Whether a server of this mod that is loaded now belongs to an account this project doesn't use: read off the tools, since a removed account's server stays until the reload. */
+async function blocked($: Engine) {
+  const loaded = new Set((await $.tool.list()).filter(t => t.name.startsWith(PREFIX)).map(t => t.name.slice(PREFIX.length).split('__')[0]!))
+  for (const server of loaded) if (await refusal($, server, '')) return true
+  return false
+}
+
 async function list($: Engine) {
   const accounts = await get<Accounts>($, 'accounts', {})
   const rows: string[] = []
@@ -175,7 +182,18 @@ async function use($: Engine, service: string, label?: string) {
   const all = await get<Active>($, 'active', {})
   await $.store.set('active', { ...all, [root]: { ...all[root], [service]: label } })
   await status($)
+  // Claude's note names the account in use: it changes from the next request on.
+  $.ui.invalidate('prompt.section')
+  $.ui.invalidate('ui.render')
   return `${service} → ${label} in ${root}.`
+}
+
+const PANE = 'accounts'
+
+async function picker($: Engine) {
+  const accounts = await get<Accounts>($, 'accounts', {})
+  const rows = Object.values(accounts).reduce((n, labels) => n + labels.length + 1, 2)
+  await $.ui.open({ id: PANE, title: 'MCP accounts', focus: true, closeOnEscape: true, rows })
 }
 
 export const register: Register = on => {
@@ -188,14 +206,38 @@ export const register: Register = on => {
 
   // Refused, never waved through, when the check itself fails: the call could reach the wrong workspace.
   on('tool.check', async ($, e, next) => {
-    // A service with two accounts always has one blocked.
-    if (unnamed(e.tool, e.input) && Object.values(await get<Accounts>($, 'accounts', {})).some(l => l.length > 1)) {
+    if (unnamed(e.tool, e.input) && (await blocked($))) {
       return { decision: 'deny', reason: "Name a server: listing every server's resources would include MCP accounts this project doesn't use." }
     }
     const t = target(e.tool, e.input)
     const reason = t && (await refusal($, t.server, t.name))
     return reason ? { decision: 'deny', reason } : next(e)
   }).catch(($, e, next) => (target(e.tool, e.input) || unnamed(e.tool, e.input) ? { decision: 'deny', reason: 'mcp-accounts could not tell which account this project uses.' } : next(e)))
+
+  // The picker: each service, then a button per account, ● on the one this project uses; a press switches and closes it.
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const accounts = await get<Accounts>($, 'accounts', {})
+    const pick = async (service: string, label: string) => {
+      await use($, service, label)
+      await $.ui.close({ id: PANE })
+    }
+    const rows = []
+    for (const service of Object.keys(accounts).sort()) {
+      const a = await active($, service)
+      rows.push(<Text bold>{service}</Text>)
+      for (const label of accounts[service]!) {
+        const inUse = label === a
+        rows.push(<Button key={`${service}-${label}`} plain label={`${inUse ? '●' : ' '} ${label}`} {...(inUse ? { autoFocus: true as const } : {})} onPress={() => pick(service, label)} />)
+      }
+    }
+    return (
+      <Box flexDirection="column">
+        {rows.length ? rows : <Text dimColor>No accounts yet: /account add {'<service> <account>'}</Text>}
+        <Text dimColor>↑↓ and Enter, or a click, switches this project · Esc closes</Text>
+      </Box>
+    )
+  })
 
   on('prompt.section', { name: 'env_info_simple' }, async ($, e, next) => {
     const r = await next(e)
@@ -205,7 +247,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'account' }, async ($, e) => {
     const [verb = '', service = '', label = '', url] = e.args.trim().split(/\s+/).filter(Boolean)
-    if (!verb) return { text: await list($) }
+    if (!verb) {
+      await picker($)
+      return { text: await list($) }
+    }
     if (verb === 'add') return { text: service && label ? await add($, service, label, url) : USAGE }
     if (verb === 'remove') return { text: service && label ? await remove($, service, label) : USAGE }
     return { text: await use($, verb, service || undefined) }
