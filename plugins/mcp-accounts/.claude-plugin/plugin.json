@@ -1,0 +1,10 @@
+{
+  "name": "mcp-accounts",
+  "version": "0.1.0",
+  "description": "Several logins for any OAuth MCP server (Slack workspaces, Supabase accounts, anything else by URL), each signed in once, with the active one picked per project by /account and the others blocked. Switching never needs a restart.",
+  "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
+  "repository": "https://github.com/JesseVent/claude-mods",
+  "license": "MIT",
+  "keywords": ["mods", "mcp", "accounts", "oauth", "slack", "supabase"],
+  "mcpServers": "./accounts.mcp.json"
+}
