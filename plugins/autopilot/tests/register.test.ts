@@ -25,7 +25,7 @@ type WorldOptions = {
   engine?: Decision
 }
 function world(on: On, o: WorldOptions = {}) {
-  const w = { forks: [] as string[], rewrites: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
+  const w = { forks: [] as string[], rewrites: [] as string[], rewriteForks: [] as string[], grills: [] as string[], asked: [] as string[], submitted: [] as string[], files: new Map<string, string>(), clock: mock.clock(on) }
   const grilled = (prompt: string) => (w.grills.push(prompt), said(o.grill?.(prompt) ?? '{"ready":true}'))
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
     const q = e.questions[0]!.question
@@ -40,7 +40,10 @@ function world(on: On, o: WorldOptions = {}) {
   on('process.run', () => ({ value: { exitCode: 0, stdout: `${o.branch ?? 'feat/x'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('model.complete', ($, e) => (e.prompt.includes('<answers>') ? grilled(e.prompt) : (w.rewrites.push(e.prompt), said(`rewritten: ${e.prompt}`))))
   on('model.fork', ($, e) => {
-    if (e.prompt.includes('<answers>')) return o.fresh ? { value: { isAnswered: false as const, reason: 'nothing-to-fork' as const } } : grilled(e.prompt)
+    if (o.fresh && e.prompt.includes('<prompt>')) return { value: { isAnswered: false as const, reason: 'nothing-to-fork' as const } }
+    if (e.prompt.includes('<answers>')) return grilled(e.prompt)
+    const typed = /<prompt>([\s\S]*)<\/prompt>/.exec(e.prompt)?.[1]
+    if (typed !== undefined) return (w.rewriteForks.push(e.prompt), w.rewrites.push(typed), said(`rewritten: ${typed}`))
     w.forks.push(e.prompt)
     const text = o.fork?.(e.prompt)
     return text === undefined ? failed : said(text)
@@ -104,6 +107,7 @@ describe('on by default', () => {
     const w = world(on, { fork: () => 'Commit notes.txt on feat/tides.' })
     await start($)
     expect(await type($, 'add a line')).toBe('rewritten: add a line')
+    expect(w.rewriteForks[0]).toContain('<prompt>add a line</prompt>')
     await ended($)
     await w.clock.settle()
     expect(w.submitted).toEqual(['rewritten: add a line', 'Commit notes.txt on feat/tides.'])
@@ -180,6 +184,8 @@ describe('asking first', () => {
     await start($)
     expect(await type($, 'make it faster')).toBe('rewritten: make it faster')
     expect(w.asked).toEqual(['Which page?'])
+    expect(w.rewriteForks).toEqual([])
+    expect(w.rewrites).toEqual(['make it faster'])
   })
 })
 
