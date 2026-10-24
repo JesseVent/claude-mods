@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, and let a session drive itself toward a goal.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, and switch MCP logins per project.",
   "owner": {
     "name": "JesseVent",
     "url": "https://github.com/JesseVent"
@@ -44,6 +44,20 @@
         "autonomy",
         "permissions",
         "prompts"
+      ]
+    },
+    {
+      "name": "mcp-accounts",
+      "source": "./plugins/mcp-accounts",
+      "description": "Several logins for any OAuth MCP server (Slack workspaces, Supabase accounts, anything else by URL), each signed in once, with the active one picked per project by /account and the others blocked. Switching never needs a restart.",
+      "category": "productivity",
+      "tags": [
+        "mods",
+        "mcp",
+        "accounts",
+        "oauth",
+        "slack",
+        "supabase"
       ]
     }
   ]
