@@ -19,7 +19,7 @@ This repo includes five mods:
 - `autopilot` — asks pointed questions when a prompt is unclear, rewrites prompts, decides permission prompts, and keeps a goal moving across turns.
 - `mcp-accounts` — several logins for any MCP server (Slack workspaces, Supabase accounts), one or many in use per project via `/account`, no restart.
 - `loadouts` — equips a named loadout of skills, MCP servers and instructions per project, and switches the rest off.
-
+<img width="1376" height="768" alt="mascots2" src="https://github.com/user-attachments/assets/528ae476-8842-4c9f-973d-dea13108379c" />
 ## Quick install
 
 ```bash
@@ -107,6 +107,7 @@ See: [plugins/loadouts](plugins/loadouts)
 | [autopilot](plugins/autopilot) | Lets sessions keep driving toward a goal by asking pointed questions when a prompt is unclear, rewriting prompts, deciding permission prompts, and choosing the next step automatically. |
 | [mcp-accounts](plugins/mcp-accounts) | Several logins for any OAuth MCP server, each signed in once, with the one a project uses picked by `/account` and the others blocked; no restart to switch. |
 | [loadouts](plugins/loadouts) | Equips one named loadout of skills, MCP servers and instructions per project, from a picker or by Claude, and switches every other loadout's set off. |
+
 
 ## Notes
 
