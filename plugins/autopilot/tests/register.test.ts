@@ -249,6 +249,9 @@ describe('permission asks', () => {
     await run($, { tool: 'Bash', command: 'git log -1', agentId: 'a1' })
     await check($, 'Bash', { command: 'git push -u origin feat/x' })
     expect(w.forks.at(-1)).toContain('<recent>Bash {"command":"git commit -m \\"add tests\\""} → [feat/x 1a2b3c] add tests\nsubagent Bash {"command":"git log -1"} → [feat/x 1a2b3c] add tests</recent>')
+    await type($, 'now lint')
+    await check($, 'Bash', { command: 'bun run lint' })
+    expect(w.forks.at(-1)).toContain('<recent>none</recent>')
   })
 
   test('an ask it leaves to the person is logged', async ($, on) => {

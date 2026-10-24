@@ -14,7 +14,7 @@ const last = atom({ plugin: 'autopilot', key: 'last' } as const, '')
 const HUMAN = new Set(['composer', 'bridge'])
 
 const POLICY =
-  'Never allow: pushing to main or master, force-pushing, deleting data outside the repository, creating or rotating credentials, anything that spends money, anything irreversible outside the working directory. Pushing and opening pull requests belong to the person: allow one only when the goal, in their own words, asks for it. Allow what the goal needs inside the working directory, committing the work on a branch included, unless the conversation shows a reason not to, such as a secret in what would be committed or the person saying not to. Files in the session scratchpad and /tmp are scratch, not data: writing, running and deleting them is fine.'
+  'Never allow: pushing to main or master, force-pushing, deleting data outside the repository, creating or rotating credentials, anything that spends money, anything irreversible outside the working directory. Pushing and opening pull requests belong to the person: allow one only when the goal, in their own words, asks for it. Allow what the goal needs inside the working directory, committing the work on a branch included, unless the conversation shows a reason not to, such as a secret in what would be committed or the person saying not to. Files the session itself wrote in its scratchpad or /tmp are scratch, not data: writing, running and deleting those is fine.'
 
 const REWRITE = `You rewrite a developer's prompt to a coding agent (Claude Code) so the agent can carry it out start to finish without asking anything. Keep every requirement and the developer's wording where it is already clear, and, for a task, end with how to prove it is done (what to run or check); a question stays a question. Never add scope.
 Write it the way the developer would say it to a teammate: plain, conversational sentences that flow, not a spec.
@@ -222,6 +222,7 @@ export const register: Register = (on, options) => {
     if (!p.on || e.command || e.isMeta || !HUMAN.has(e.origin.kind)) return next(e)
     // Typed over a goal being driven it steers that goal; otherwise it is the new goal, asked about first.
     const steer = !!e.turnId && p.driving && !!p.goal
+    if (!steer) recent.length = 0
     const own = steer ? e.text : await brief($, e.text)
     const text = await rewrite($, own)
     // The goal stays in the person's own words: the rewrite reads the session, so text Claude read could slant it.
@@ -345,6 +346,7 @@ export const register: Register = (on, options) => {
       later($, `Carry on toward the goal: ${p.goal}`)
       return { text: `Autopilot on, resuming: ${clip(p.goal, 200)}` }
     }
+    recent.length = 0
     const goal = await brief($, arg)
     const text = await rewrite($, goal)
     await set($, { on: true, goal, turns: 0, driving: true })
