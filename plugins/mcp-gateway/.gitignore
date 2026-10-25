@@ -1,0 +1,4 @@
+node_modules/
+*.config.json
+# The plugin runs the committed bundle, even where a global ignore drops dist/.
+!dist/

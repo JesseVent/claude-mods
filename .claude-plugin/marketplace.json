@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, and equip a loadout of skills, MCP servers and instructions per project.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, equip a loadout of skills, MCP servers and instructions per project, and call any API with keys kept out of the transcript.",
   "owner": {
     "name": "JesseVent",
     "url": "https://github.com/JesseVent"
@@ -71,6 +71,20 @@
         "skills",
         "mcp",
         "instructions"
+      ]
+    },
+    {
+      "name": "mcp-gateway",
+      "source": "./plugins/mcp-gateway",
+      "description": "One MCP server for any REST API or remote MCP server: Claude names an alias from your config and the gateway calls it with that alias's API key, token or headers, switching mid-session with no reload. Keys stay in the config, never in the transcript.",
+      "category": "productivity",
+      "tags": [
+        "mods",
+        "mcp",
+        "api",
+        "rest",
+        "gateway",
+        "api-keys"
       ]
     }
   ]
