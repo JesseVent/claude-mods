@@ -1,0 +1,24 @@
+{
+  "name": "mcp-gateway",
+  "version": "0.2.0",
+  "description": "A stdio MCP server that forwards calls to whichever configured remote MCP server or REST API you name, switching mid-session with no client reload.",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --target=node --minify --outfile=dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "test": "bun run build && tsc --noEmit && node test/e2e.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "mcp-gateway",
+  "version": "0.2.0",
+  "description": "One MCP server for any REST API or remote MCP server: Claude names an alias from your config and the gateway calls it with that alias's API key, token or headers, switching mid-session with no reload. Keys stay in the config, never in the transcript.",
+  "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
+  "repository": "https://github.com/JesseVent/claude-mods",
+  "license": "MIT",
+  "keywords": ["mods", "mcp", "api", "rest", "gateway", "api-keys"],
+  "mcpServers": {
+    "gateway": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"] }
+  }
+}
