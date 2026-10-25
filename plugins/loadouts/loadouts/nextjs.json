@@ -1,0 +1,8 @@
+{
+  "name": "nextjs",
+  "skills": ["nextjs-best-practices", "vercel-react-best-practices"],
+  "mcpServers": {
+    "next-devtools": { "type": "stdio", "command": "bunx", "args": ["next-devtools-mcp@latest"] }
+  },
+  "instructions": "This is a Next.js App Router project. Use the next-devtools MCP server's tools for the running dev server's errors, routes and logs, and its Next.js docs search before answering from memory. Prefer Server Components and Server Actions; mark a component 'use client' only when it needs state, effects or browser APIs."
+}

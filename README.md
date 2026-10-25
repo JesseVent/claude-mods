@@ -9,15 +9,17 @@ A small toolkit for Claude Code that helps you:
 
 - keep API keys out of the transcript and hidden from Claude,
 - see what the session actually has in context,
-- let sessions drive themselves with guarded automation.
+- let sessions drive themselves with guarded automation,
+- swap the skills, MCP servers and instructions in effect for what you're working on.
 
-This repo includes four mods:
+This repo includes five mods:
 
 - `secret-keeper` — hides pasted API keys from Claude and stores them in your macOS Keychain.
 - `context-compass` — shows the live budget, files in context, disk changes, helper agents, and more.
 - `autopilot` — asks pointed questions when a prompt is unclear, rewrites prompts, decides permission prompts, and keeps a goal moving across turns.
 - `mcp-accounts` — several logins for any MCP server (Slack workspaces, Supabase accounts), one or many in use per project via `/account`, no restart.
-
+- `loadouts` — equips a named loadout of skills, MCP servers and instructions per project, and switches the rest off.
+<img width="1376" height="768" alt="mascots2" src="https://github.com/user-attachments/assets/528ae476-8842-4c9f-973d-dea13108379c" />
 ## Quick install
 
 ```bash
@@ -26,6 +28,7 @@ This repo includes four mods:
 /plugin install context-compass@claude-mods
 /plugin install autopilot@claude-mods
 /plugin install mcp-accounts@claude-mods
+/plugin install loadouts@claude-mods
 ```
 
 On Claude Code 2.1.275 or later, this also works:
@@ -35,6 +38,7 @@ On Claude Code 2.1.275 or later, this also works:
 /plugin install context-compass --marketplace JesseVent/claude-mods
 /plugin install autopilot --marketplace JesseVent/claude-mods
 /plugin install mcp-accounts --marketplace JesseVent/claude-mods
+/plugin install loadouts --marketplace JesseVent/claude-mods
 ```
 
 ## What each mod does
@@ -83,6 +87,17 @@ Best for:
 
 See: [plugins/mcp-accounts](plugins/mcp-accounts)
 
+### loadouts
+
+Requip, as in Fairy Tail. A loadout is a JSON file naming skills, MCP servers and instructions: equip `supabase` in the backend repo and `nextjs` in the frontend one, from the `/loadout` picker or by Claude itself. The equipped loadout's set is in effect and every other loadout's is off, with no restart.
+
+Best for:
+- projects on different stacks
+- keeping unrelated MCP servers and skills out of Claude's way
+- per-stack instructions that follow the project
+
+See: [plugins/loadouts](plugins/loadouts)
+
 ## Mod summary
 
 | Mod | What it does |
@@ -91,7 +106,8 @@ See: [plugins/mcp-accounts](plugins/mcp-accounts)
 | [context-compass](plugins/context-compass) | Shows what a session has in context: budget, file reads, disk changes, helper agents, skills, and compaction summaries. |
 | [autopilot](plugins/autopilot) | Lets sessions keep driving toward a goal by asking pointed questions when a prompt is unclear, rewriting prompts, deciding permission prompts, and choosing the next step automatically. |
 | [mcp-accounts](plugins/mcp-accounts) | Several logins for any OAuth MCP server, each signed in once, with the one a project uses picked by `/account` and the others blocked; no restart to switch. |
-<img width="1376" height="768" alt="mascots2" src="https://github.com/user-attachments/assets/528ae476-8842-4c9f-973d-dea13108379c" />
+| [loadouts](plugins/loadouts) | Equips one named loadout of skills, MCP servers and instructions per project, from a picker or by Claude, and switches every other loadout's set off. |
+
 
 ## Notes
 
