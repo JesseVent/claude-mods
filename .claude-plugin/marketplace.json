@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, equip a loadout of skills, MCP servers and instructions per project, and call any API with keys kept out of the transcript.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, equip a loadout of skills, MCP servers and instructions per project, call any API with keys kept out of the transcript, and design dashboards by Stephen Few's rules.",
   "owner": {
     "name": "JesseVent",
     "url": "https://github.com/JesseVent"
@@ -85,6 +85,19 @@
         "rest",
         "gateway",
         "api-keys"
+      ]
+    },
+    {
+      "name": "information-dashboard-design",
+      "source": "./plugins/information-dashboard-design",
+      "description": "A skill that designs and critiques dashboards by Stephen Few's Information Dashboard Design: what belongs on a single glanceable screen, bullet graphs and sparklines over gauges and pies, layout, color and highlighting, the thirteen common mistakes, and Few's own palette and drawing specs taken from the book's figures.",
+      "category": "design",
+      "tags": [
+        "mods",
+        "skills",
+        "dashboards",
+        "data-visualization",
+        "charts"
       ]
     }
   ]
