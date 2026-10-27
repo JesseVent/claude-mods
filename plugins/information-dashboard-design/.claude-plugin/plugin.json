@@ -1,0 +1,9 @@
+{
+  "name": "information-dashboard-design",
+  "version": "0.1.0",
+  "description": "A skill that designs and critiques dashboards by Stephen Few's Information Dashboard Design: what belongs on a single glanceable screen, bullet graphs and sparklines over gauges and pies, layout, color and highlighting, the thirteen common mistakes, and Few's own palette and drawing specs taken from the book's figures. Adds per-chart best practices and a Lean UX design-and-test loop.",
+  "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
+  "repository": "https://github.com/JesseVent/claude-mods",
+  "license": "MIT",
+  "keywords": ["mods", "skills", "dashboards", "data-visualization", "charts", "stephen-few"]
+}

@@ -11,9 +11,10 @@ A small toolkit for Claude Code that helps you:
 - see what the session actually has in context,
 - let sessions drive themselves with guarded automation,
 - swap the skills, MCP servers and instructions in effect for what you're working on,
-- call any API or remote MCP server with keys that never reach the transcript.
+- call any API or remote MCP server with keys that never reach the transcript,
+- design dashboards that read at a glance.
 
-This repo includes six mods:
+This repo includes seven mods:
 
 - `secret-keeper` — hides pasted API keys from Claude and stores them in your macOS Keychain.
 - `context-compass` — shows the live budget, files in context, disk changes, helper agents, and more.
@@ -21,6 +22,7 @@ This repo includes six mods:
 - `mcp-accounts` — several logins for any MCP server (Slack workspaces, Supabase accounts), one or many in use per project via `/account`, no restart.
 - `loadouts` — equips a named loadout of skills, MCP servers and instructions per project, and switches the rest off.
 - `mcp-gateway` — one MCP server that calls any REST API or remote MCP server you name, with its key from your config.
+- `information-dashboard-design` — a skill that designs and critiques dashboards by Stephen Few's *Information Dashboard Design*.
 <img width="1376" height="768" alt="mascots2" src="https://github.com/user-attachments/assets/528ae476-8842-4c9f-973d-dea13108379c" />
 ## Quick install
 
@@ -32,6 +34,7 @@ This repo includes six mods:
 /plugin install mcp-accounts@claude-mods
 /plugin install loadouts@claude-mods
 /plugin install mcp-gateway@claude-mods
+/plugin install information-dashboard-design@claude-mods
 ```
 
 On Claude Code 2.1.275 or later, this also works:
@@ -43,6 +46,7 @@ On Claude Code 2.1.275 or later, this also works:
 /plugin install mcp-accounts --marketplace JesseVent/claude-mods
 /plugin install loadouts --marketplace JesseVent/claude-mods
 /plugin install mcp-gateway --marketplace JesseVent/claude-mods
+/plugin install information-dashboard-design --marketplace JesseVent/claude-mods
 ```
 
 ## What each mod does
@@ -113,6 +117,24 @@ Best for:
 
 See: [plugins/mcp-gateway](plugins/mcp-gateway)
 
+### information-dashboard-design
+
+Dashboards that read at a glance. This is a skill, not a hook: Claude loads it whenever you design, build or critique a dashboard, KPI screen or status page, in any tool. It follows Stephen Few's *Information Dashboard Design*:
+- one screen
+- each measure shown against a target or its history
+- bullet graphs and sparklines in place of gauges and pies
+- muted color, with bright color only where something needs attention
+- a check against the thirteen common mistakes
+
+It also includes Few's palette and drawing specs, taken from the book's figures.
+
+Best for:
+- building a dashboard in HTML/React, Tableau, Power BI, Looker, Grafana or a spreadsheet
+- reviewing a dashboard someone else made
+- choosing which chart to use for a measure
+
+See: [plugins/information-dashboard-design](plugins/information-dashboard-design)
+
 ## Mod summary
 
 | Mod | What it does |
@@ -123,6 +145,7 @@ See: [plugins/mcp-gateway](plugins/mcp-gateway)
 | [mcp-accounts](plugins/mcp-accounts) | Several logins for any OAuth MCP server, each signed in once, with the one a project uses picked by `/account` and the others blocked; no restart to switch. |
 | [loadouts](plugins/loadouts) | Equips one named loadout of skills, MCP servers and instructions per project, from a picker or by Claude, and switches every other loadout's set off. |
 | [mcp-gateway](plugins/mcp-gateway) | One MCP server for any REST API or remote MCP server: Claude names an alias and the gateway sends the request with that alias's key from your config, never the transcript. |
+| [information-dashboard-design](plugins/information-dashboard-design) | A skill for designing and critiquing dashboards by Stephen Few's rules: one glanceable screen, bullet graphs and sparklines, muted color, and the thirteen common mistakes. |
 
 
 ## Notes
