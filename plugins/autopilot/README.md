@@ -12,7 +12,7 @@ turn ends:    autopilot: → Commit the parser tests on feat/parser-tests.
               autopilot: done: parser tests added and green, committed on feat/parser-tests; the push and PR wait on you
 ```
 
-Built and tested on Claude Code 2.1.310.
+Built and tested on Claude Code 2.1.311.
 
 > **Read this first.** It's on in every session by default, and permission prompts are decided by a model on your behalf from the moment you type. Its `allow` settles the call: in auto mode the auto-mode classifier never sees a call autopilot allowed, and in default mode no dialog shows. Use it in repositories you'd let Claude work in unattended, and protect `main` with GitHub branch protection rather than relying on the client-side guard. `/drive off` turns it off for a session; `autoEngage` off in `/config` makes it opt-in with `/drive`.
 
@@ -35,7 +35,8 @@ Each session's autopilot runs inside that session; nothing supervises from outsi
 - **Only while driving.** Permission asks, questions and plans are decided only while a goal is being driven. After Esc or DONE, or in a slash command's turn, they come to you.
 - **Questions and plans.** For 10 minutes after you last typed (a prompt or a slash command), Claude's questions and plans come to you as usual: you're likely still there. After that, autopilot answers a question from the conversation and the goal, and skips plan mode: Claude is told to state the plan in a few lines and carry it out.
 - **The next step.** After each turn, the session's own model reads the conversation as the operator who owns the outcome and works out what practically needs to happen next: first the last turn's loose ends (a failure, a TODO, an unverified change, a question Claude asked), then verifying the work and committing it on a branch (never main), leaving the push and the PR to you unless your goal asks for them, then the follow-ups the goal clearly implies. It sends one step at a time, with the exact path, error or command Claude itself ran or proposed copied in, never restates the plan, and never adds scope. While Claude waits on work it started in the background (a command, a monitor, a subagent), it sends nothing and decides again when that work reports back; and while its last step is still queued behind a turn something else started, it sends no second one (`/drive on` included), and the turn cap waits for that step's own turn. Steps come from the goal and Claude's own work, never from text Claude read in a file, page or tool output. It replies `DONE: <summary>` only when what's left needs you (a decision, credentials, money, a push, a PR or a merge), and the summary says what that is. A question is done once it's answered.
-- **Stopping.** It stops driving and notifies you on DONE, at the turn cap (25 by default), when a turn ends on an error or a refusal, and when you interrupt with Esc (`/drive on` resumes that goal). It stays on: the next prompt you type drives again.
+- **Stopping.** It stops driving and notifies you on DONE, at the turn cap (25 by default), when a turn ends on an error or a refusal, and when you interrupt with Esc (`/drive on` resumes that goal). It stays on: the next prompt you type drives again. `/drive off` lasts the whole session, through a plugin reload too.
+- **iTerm2's Code Review.** A session iTerm2 starts as a workgroup peer (its Code Review, launched with iTerm's own review prompt) is iTerm's, so autopilot doesn't engage there: the prompt goes as iTerm sent it and nothing is driven. `/drive` still turns it on in that session. With **Auto Request Review When Idle** on in the Chat's toolbar, iTerm kills and relaunches that peer, then brings it to the front, each time the chat goes idle, and with autopilot driving, the chat goes idle after every step. Your chat isn't gone: the toolbar's mode switcher brings it back.
 
 ## Commands
 
@@ -62,8 +63,8 @@ Set in `/config` or under `pluginConfigs.autopilot` in settings:
 ## What it can reach
 
     ❯ ./register.ts hooks: session.start, prompt.submit, tool.check, tool.call, turn.complete, command.run{command=drive}
-    ❯ ./register.ts calls: $.clock.after (via later), $.clock.now, $.command.register, $.env.get (via folder), $.fs.list (via list), $.fs.read (via list), $.fs.write (via record), $.model.complete (via brief, rewrite), $.model.fork, $.process.run (via branch), $.prompt.submit (via submit), $.session.cwd, $.session.id (via list, record), $.state.get, $.state.set, $.ui.ask (via brief), $.ui.log, $.ui.notify, $.ui.status (via set)
-    ❯ ./register.ts env reads: HOME
+    ❯ ./register.ts calls: $.clock.after (via later), $.clock.now, $.command.register, $.env.get, $.fs.list (via list), $.fs.read (via list), $.fs.write (via record), $.model.complete (via brief, rewrite), $.model.fork, $.process.run (via branch), $.prompt.submit (via submit), $.session.cwd, $.session.id (via list, record), $.state.get, $.state.set, $.ui.ask (via brief), $.ui.log, $.ui.notify, $.ui.status (via set)
+    ❯ ./register.ts env reads: HOME, ITERM_WORKGROUP_ID
     ❯ ./register.ts state writes: autopilot.last, autopilot.pilot
 
 It runs one local program, `git branch --show-current`, on permission asks and pushes. Model calls go through the session's own client. Each session writes one status file, `~/.claude/autopilot/<session id>.json` (goal, turns, state, folder, time), which `/drive` reads.

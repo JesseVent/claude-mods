@@ -1,6 +1,7 @@
 /** This session's autopilot: armed or off, the goal, how many turns it has started, and whether it keeps going after each turn. */
 export type Pilot = {
-  on: boolean
+  /** Unset until auto-engage or `/drive` decides it, so a reload never re-arms a session turned off. */
+  on?: boolean
   goal: string
   turns: number
   driving: boolean

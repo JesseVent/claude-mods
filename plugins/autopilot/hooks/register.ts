@@ -6,7 +6,7 @@ import type { Pilot } from '../types'
 type Engine = EngineInterface
 type Verdict = { decision: 'allow' | 'deny' | 'ask'; reason: string }
 
-const pilot = atom({ plugin: 'autopilot', key: 'pilot' } as const, { on: false, goal: '', turns: 0, driving: false } as Pilot)
+const pilot = atom({ plugin: 'autopilot', key: 'pilot' } as const, { goal: '', turns: 0, driving: false } as Pilot)
 /** Claude's last reply on the main thread: once there is one, a typed prompt goes as typed. */
 const last = atom({ plugin: 'autopilot', key: 'last' } as const, '')
 
@@ -211,8 +211,12 @@ export const register: Register = (on, options) => {
       argumentHint: '[<goal> | on | off]',
     })
     const p = await read($, pilot)
-    if (cfg.autoEngage && !p.on) await set($, { on: true, goal: '', turns: 0, driving: false })
-    else if (p.on) await set($, p)
+    // Once per session: a reload or a worker respawn runs this again, and must not re-arm a session turned off.
+    // A workgroup peer (iTerm2's Code Review) is iTerm's: it launched it with its own prompt, and reloads it when the chat goes idle.
+    // ponytail: only iTerm2's peers are told apart; another program that launches `claude '<prompt>'` still gets autopilot.
+    if (p.on === undefined) {
+      if (cfg.autoEngage && !(await $.env.get('ITERM_WORKGROUP_ID'))) await set($, { on: true, goal: '', turns: 0, driving: false })
+    } else if (p.on) await set($, p)
     return next(e)
   })
 

@@ -1,6 +1,6 @@
 {
   "name": "autopilot",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Drives your Claude Code sessions on its own: asks you pointed questions first when a prompt leaves the goal, constraints or check unclear, rewrites a session's first prompt, decides permission asks from the whole conversation and Claude's questions once you've gone quiet, and after each turn sends the practical next step (fix, verify, commit on a branch) until only you can decide what is left, the push and the PR included.",
   "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
   "repository": "https://github.com/JesseVent/claude-mods",
