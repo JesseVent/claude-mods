@@ -12,9 +12,10 @@ A small toolkit for Claude Code that helps you:
 - let sessions drive themselves with guarded automation,
 - swap the skills, MCP servers and instructions in effect for what you're working on,
 - call any API or remote MCP server with keys that never reach the transcript,
-- design dashboards that read at a glance.
+- design dashboards that read at a glance,
+- change a Supabase schema in development without writing migrations.
 
-This repo includes seven mods:
+This repo includes eight mods:
 
 - `secret-keeper` — hides pasted API keys from Claude and stores them in your macOS Keychain.
 - `context-compass` — shows the live budget, files in context, disk changes, helper agents, and more.
@@ -23,6 +24,7 @@ This repo includes seven mods:
 - `loadouts` — equips a named loadout of skills, MCP servers and instructions per project, and switches the rest off.
 - `mcp-gateway` — one MCP server that calls any REST API or remote MCP server you name, with its key from your config.
 - `information-dashboard-design` — a skill that designs and critiques dashboards by Stephen Few's *Information Dashboard Design*.
+- `supabase-flatten` — a skill that swaps a dev project's migrations for a `supabase/schemas/` tree applied straight to the database.
 <img width="1376" height="768" alt="mascots2" src="https://github.com/user-attachments/assets/528ae476-8842-4c9f-973d-dea13108379c" />
 ## Quick install
 
@@ -35,6 +37,7 @@ This repo includes seven mods:
 /plugin install loadouts@claude-mods
 /plugin install mcp-gateway@claude-mods
 /plugin install information-dashboard-design@claude-mods
+/plugin install supabase-flatten@claude-mods
 ```
 
 On Claude Code 2.1.275 or later, this also works:
@@ -47,6 +50,7 @@ On Claude Code 2.1.275 or later, this also works:
 /plugin install loadouts --marketplace JesseVent/claude-mods
 /plugin install mcp-gateway --marketplace JesseVent/claude-mods
 /plugin install information-dashboard-design --marketplace JesseVent/claude-mods
+/plugin install supabase-flatten --marketplace JesseVent/claude-mods
 ```
 
 ## What each mod does
@@ -135,6 +139,23 @@ Best for:
 
 See: [plugins/information-dashboard-design](plugins/information-dashboard-design)
 
+### supabase-flatten
+
+No migrations while nothing is final. This is a skill: Claude flattens a dev project's `supabase/migrations/` into a `supabase/schemas/` tree, one SQL file per table, view and function, exported by Supabase's [pg-delta](https://github.com/supabase/pg-toolbelt/tree/main/packages/pg-delta). From then on:
+- you edit a table's file and Claude applies it; pg-delta diffs it against the dev database, no migration file
+- dropping data needs an explicit go-ahead
+- a reset rebuilds the database from the tree and the seed
+- going live writes one baseline migration, after which the Supabase CLI keeps writing migrations from the same tree
+
+It won't run in a project whose `CLAUDE.md` says `Phase: live`.
+
+Best for:
+- early projects whose schema changes daily
+- projects that already have dozens of throwaway migrations
+- getting the latest schema state as readable files
+
+See: [plugins/supabase-flatten](plugins/supabase-flatten)
+
 ## Mod summary
 
 | Mod | What it does |
@@ -146,6 +167,7 @@ See: [plugins/information-dashboard-design](plugins/information-dashboard-design
 | [loadouts](plugins/loadouts) | Equips one named loadout of skills, MCP servers and instructions per project, from a picker or by Claude, and switches every other loadout's set off. |
 | [mcp-gateway](plugins/mcp-gateway) | One MCP server for any REST API or remote MCP server: Claude names an alias and the gateway sends the request with that alias's key from your config, never the transcript. |
 | [information-dashboard-design](plugins/information-dashboard-design) | A skill for designing and critiquing dashboards by Stephen Few's rules: one glanceable screen, bullet graphs and sparklines, muted color, and the thirteen common mistakes. |
+| [supabase-flatten](plugins/supabase-flatten) | A skill for Supabase projects in development: migrations become a `supabase/schemas/` tree that pg-delta applies straight to the dev database, until one baseline migration when the project goes live. |
 
 
 ## Notes

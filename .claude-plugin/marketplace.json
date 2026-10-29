@@ -99,6 +99,19 @@
         "data-visualization",
         "charts"
       ]
+    },
+    {
+      "name": "supabase-flatten",
+      "source": "./plugins/supabase-flatten",
+      "description": "A skill for Supabase projects in development: flattens supabase/migrations/ into a supabase/schemas/ tree exported by pg-delta, applies edits to it straight to the dev database with no migration files, resets the database to the latest schema plus seed, and writes one baseline migration when the project goes live.",
+      "category": "development",
+      "tags": [
+        "mods",
+        "skills",
+        "supabase",
+        "postgres",
+        "migrations"
+      ]
     }
   ]
 }
