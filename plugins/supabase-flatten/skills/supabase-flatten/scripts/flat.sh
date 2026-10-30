@@ -41,9 +41,10 @@ flatten() {
   [ -z "$(git status --porcelain -- supabase/migrations)" ] || die "commit supabase/migrations first; git is what keeps the migrations this deletes"
   local url out others
   # Once this is pushed, teammates' supabase start and db reset give an empty database.
-  others=$(git log --format=%an | grep -vxF "$(git config user.name)" | grep -v '\[bot\]$' | sort -u | paste -sd, -) || true
-  [ -z "$others" ] || [ "${FLAT_SHARED_OK:-}" = 1 ] ||
-    die "others commit to this repo ($others): once pushed, their supabase start and db reset give an empty database until they run flat.sh reset. Tell the user; rerun with FLAT_SHARED_OK=1 once they agree"
+  # A count, not names: an author name is anyone's text and this message is read by an agent.
+  others=$(git log --format=%an | grep -vxF "$(git config user.name)" | grep -v '\[bot\]$' | sort -u | wc -l | tr -d ' ') || true
+  [ "${others:-0}" = 0 ] || [ "${FLAT_SHARED_OK:-}" = 1 ] ||
+    die "this repo has commits from $others other author(s) (git shortlog -sn lists them): once pushed, their supabase start and db reset give an empty database until they run flat.sh reset. Tell the user; rerun with FLAT_SHARED_OK=1 once they agree"
   url=$(db_url)
   pgdelta schema export --source "$url" --out-dir "$SCHEMAS" --profile supabase
   # The tree only replaces the migrations if it reloads to the same database.

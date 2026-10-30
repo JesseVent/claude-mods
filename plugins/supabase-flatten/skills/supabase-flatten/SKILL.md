@@ -20,7 +20,7 @@ Without `--db-url` (or `DB_URL` in the environment) the target is the local stac
 
 ## Flatten a project
 
-Only when the user asks to flatten this project. In a repo other people commit to, flatten stops and names them: tell the user that once the change is pushed, their `supabase start` and `supabase db reset` give an empty database until they run `flat.sh reset`, and rerun with `FLAT_SHARED_OK=1` only after the user agrees.
+Only when the user asks to flatten this project. In a repo other people commit to, flatten stops and says how many there are: tell the user that once the change is pushed, their `supabase start` and `supabase db reset` give an empty database until they run `flat.sh reset`, and rerun with `FLAT_SHARED_OK=1` only after the user agrees.
 
 1. `supabase start`. If the local database has drifted from the migrations and you don't want that drift, `supabase db reset` first. Flatten exports whatever the database holds now.
 2. Commit `supabase/migrations/`. Flatten refuses uncommitted migrations, because git is the only copy it leaves.
