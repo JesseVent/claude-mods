@@ -1,6 +1,6 @@
 ---
 name: supabase-flatten
-description: Run a Supabase project in development with no migrations. Flattens supabase/migrations/ into a supabase/schemas/ tree (one SQL file per table, view and function, exported by pg-delta), applies edits to that tree straight to the dev database with no migration file, resets the database to the latest schema plus seed, and turns the tree back into one baseline migration when the project goes live. Use it whenever a Supabase project marked Phase dev needs a schema change, or the user wants to flatten, squash or get rid of migrations, get the latest schema state, rebuild or reset the dev database from the schema, or asks how to change tables without writing a migration. Not for projects marked Phase live.
+description: Run a Supabase project in development with no migrations. Flattens supabase/migrations/ into a supabase/schemas/ tree (one SQL file per table, view and function, exported by pg-delta), applies edits to that tree straight to the dev database with no migration file, resets the database to the latest schema plus seed, and turns the tree back into one baseline migration when the project goes live. Use it in a project that is already flattened (it has supabase/schemas/.pgdelta-export.json and no migration files) to change, apply, reset or graduate its schema, or when the user explicitly asks to flatten, squash or get rid of this project's migrations. Never flatten a project on your own because it is Phase dev or because a schema change was asked for. Not for projects marked Phase live.
 ---
 
 # Supabase flatten
@@ -19,6 +19,8 @@ The script is `scripts/flat.sh` in this skill's base directory. Run it from the 
 Without `--db-url` (or `DB_URL` in the environment) the target is the local stack from `supabase status`.
 
 ## Flatten a project
+
+Only when the user asks to flatten this project. In a repo other people commit to, flatten stops and names them: tell the user that once the change is pushed, their `supabase start` and `supabase db reset` give an empty database until they run `flat.sh reset`, and rerun with `FLAT_SHARED_OK=1` only after the user agrees.
 
 1. `supabase start`. If the local database has drifted from the migrations and you don't want that drift, `supabase db reset` first. Flatten exports whatever the database holds now.
 2. Commit `supabase/migrations/`. Flatten refuses uncommitted migrations, because git is the only copy it leaves.

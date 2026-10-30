@@ -147,7 +147,7 @@ No migrations while nothing is final. This is a skill: Claude flattens a dev pro
 - a reset rebuilds the database from the tree and the seed
 - going live writes one baseline migration, after which the Supabase CLI keeps writing migrations from the same tree
 
-It won't run in a project whose `CLAUDE.md` says `Phase: live`.
+It only flattens a project when you ask, stops to ask first in a repo other people commit to, and won't run in a project whose `CLAUDE.md` says `Phase: live`.
 
 Best for:
 - early projects whose schema changes daily

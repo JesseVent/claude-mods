@@ -1,6 +1,6 @@
 {
   "name": "supabase-flatten",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A skill for Supabase projects in development: flattens supabase/migrations/ into a supabase/schemas/ tree exported by pg-delta, applies edits to it straight to the dev database with no migration files, resets the database to the latest schema plus seed, and writes one baseline migration when the project goes live.",
   "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
   "repository": "https://github.com/JesseVent/claude-mods",

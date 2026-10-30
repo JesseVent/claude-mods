@@ -39,7 +39,11 @@ apply() {
 flatten() {
   git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repo; git is what keeps the migrations this deletes"
   [ -z "$(git status --porcelain -- supabase/migrations)" ] || die "commit supabase/migrations first; git is what keeps the migrations this deletes"
-  local url out
+  local url out others
+  # Once this is pushed, teammates' supabase start and db reset give an empty database.
+  others=$(git log --format=%an | grep -vxF "$(git config user.name)" | grep -v '\[bot\]$' | sort -u | paste -sd, -) || true
+  [ -z "$others" ] || [ "${FLAT_SHARED_OK:-}" = 1 ] ||
+    die "others commit to this repo ($others): once pushed, their supabase start and db reset give an empty database until they run flat.sh reset. Tell the user; rerun with FLAT_SHARED_OK=1 once they agree"
   url=$(db_url)
   pgdelta schema export --source "$url" --out-dir "$SCHEMAS" --profile supabase
   # The tree only replaces the migrations if it reloads to the same database.

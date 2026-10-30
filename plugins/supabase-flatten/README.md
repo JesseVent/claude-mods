@@ -6,7 +6,14 @@ A skill for Supabase projects that are still in development. Instead of a growin
 /plugin install supabase-flatten@claude-mods
 ```
 
-Then ask Claude to flatten the project's migrations, or to change a table in a project marked `Phase: dev`.
+Then ask Claude to flatten a project's migrations. It never flattens a project you haven't asked it to, and in a repo other people commit to it stops and asks first, since once pushed their `supabase start` and `supabase db reset` give an empty database until they run `flat.sh reset`. In a flattened project, Claude uses it for every schema change.
+
+To keep it to the projects you choose, turn it off for your account and on per project (`local` is just you, not committed):
+
+```bash
+claude plugin disable supabase-flatten@claude-mods --scope user
+claude plugin enable supabase-flatten@claude-mods --scope local   # in each project
+```
 
 ## What it runs
 
