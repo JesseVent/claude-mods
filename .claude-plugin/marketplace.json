@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-mods",
-  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, equip a loadout of skills, MCP servers and instructions per project, call any API with keys kept out of the transcript, and design dashboards by Stephen Few's rules.",
+  "description": "Claude Code mods: keep pasted secrets out of the transcript, see what a session has in context, let a session drive itself toward a goal, switch MCP logins per project, equip a loadout of skills, MCP servers and instructions per project, call any API with keys kept out of the transcript, design dashboards by Stephen Few's rules, and change a Supabase schema in development without writing migrations.",
   "owner": {
     "name": "JesseVent",
     "url": "https://github.com/JesseVent"
@@ -98,6 +98,19 @@
         "dashboards",
         "data-visualization",
         "charts"
+      ]
+    },
+    {
+      "name": "supabase-flatten",
+      "source": "./plugins/supabase-flatten",
+      "description": "A skill for Supabase projects in development: flattens supabase/migrations/ into a supabase/schemas/ tree exported by pg-delta, applies edits to it straight to the dev database with no migration files, resets the database to the latest schema plus seed, and writes one baseline migration when the project goes live.",
+      "category": "development",
+      "tags": [
+        "mods",
+        "skills",
+        "supabase",
+        "postgres",
+        "migrations"
       ]
     }
   ]
