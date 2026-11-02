@@ -1,6 +1,6 @@
 {
   "name": "secret-keeper",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Keeps the secrets you paste out of Claude's context and the transcript, stores them per project in the macOS Keychain, and hands them to Bash as environment variables. Optional PII hiding.",
   "author": { "name": "JesseVent", "url": "https://github.com/JesseVent" },
   "repository": "https://github.com/JesseVent/claude-mods",

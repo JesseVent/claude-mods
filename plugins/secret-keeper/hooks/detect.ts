@@ -64,6 +64,10 @@ const PROVIDERS: Array<[id: string, name: string, pattern: string]> = [
   ['mailchimp', 'MAILCHIMP_API_KEY', '[a-f0-9]{32}-us\\d{1,2}'],
   ['doppler', 'DOPPLER_TOKEN', 'dp\\.(?:pt|st|sa|ct|scim|audit)\\.[A-Za-z0-9]{40,44}'],
   ['digitalocean', 'DIGITALOCEAN_TOKEN', 'do[opr]_v1_[a-f0-9]{64}'],
+  // 40 characters, then an 8-hex checksum: user and account API tokens, the Global API key, Access service token secrets
+  ['cloudflare', 'CLOUDFLARE_API_TOKEN', 'cf(?:ut|at)_[A-Za-z0-9]{40}[a-f0-9]{8}'],
+  ['cloudflare-key', 'CLOUDFLARE_API_KEY', 'cfk_[A-Za-z0-9]{40}[a-f0-9]{8}'],
+  ['cloudflare-access', 'CF_ACCESS_CLIENT_SECRET', 'cfast_[A-Za-z0-9]{40}[a-f0-9]{8}'],
   ['mapbox', 'MAPBOX_SECRET_TOKEN', 'sk\\.eyJ[A-Za-z0-9_-]{30,300}\\.[A-Za-z0-9_-]{20,30}'],
   ['fireworks', 'FIREWORKS_API_KEY', 'fw_[A-Za-z0-9]{24}'],
   ['figma', 'FIGMA_TOKEN', 'figd_[A-Za-z0-9_-]{40,60}'],

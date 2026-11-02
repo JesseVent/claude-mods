@@ -70,7 +70,7 @@ Set in `/plugin`; they're stored under `pluginConfigs` in settings.
 ## Rules
 
 **Providers, by documented prefix:**
-`anthropic`, `openai`, `openai-scoped`, `openrouter`, `elevenlabs`, `deepseek`, `aws-access-key`, `github`, `github-fine-grained`, `gitlab`, `slack`, `slack-webhook`, `stripe`, `stripe-webhook`, `sendgrid`, `twilio`, `google`, `google-oauth`, `supabase-pat`, `supabase-secret`, `posthog`, `xai`, `groq`, `replicate`, `perplexity`, `huggingface`, `npm`, `pypi`, `linear`, `notion`, `resend`, `shopify`, `databricks`, `sentry`, `discord-bot`, `discord-webhook`, `telegram`, `mailgun`, `mailchimp`, `doppler`, `digitalocean`, `mapbox`, `fireworks`, `figma`, `atlassian`, `square`, `age`.
+`anthropic`, `openai`, `openai-scoped`, `openrouter`, `elevenlabs`, `deepseek`, `aws-access-key`, `github`, `github-fine-grained`, `gitlab`, `slack`, `slack-webhook`, `stripe`, `stripe-webhook`, `sendgrid`, `twilio`, `google`, `google-oauth`, `supabase-pat`, `supabase-secret`, `posthog`, `xai`, `groq`, `replicate`, `perplexity`, `huggingface`, `npm`, `pypi`, `linear`, `notion`, `resend`, `shopify`, `databricks`, `sentry`, `discord-bot`, `discord-webhook`, `telegram`, `mailgun`, `mailchimp`, `doppler`, `digitalocean`, `cloudflare` (`cfat_`, `cfut_`), `cloudflare-key` (`cfk_`), `cloudflare-access` (`cfast_`), `mapbox`, `fireworks`, `figma`, `atlassian`, `square`, `age`.
 
 **By structure:**
 - `private-key`: a PEM block;
