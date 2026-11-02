@@ -25,6 +25,7 @@ type WorldOptions = {
   branch?: string
   engine?: Decision
   hold?: boolean
+  workgroup?: string
 }
 function world(on: On, o: WorldOptions = {}) {
   const held: (() => void)[] = []
@@ -38,7 +39,7 @@ function world(on: On, o: WorldOptions = {}) {
   })
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 's1' }))
-  on('env.get', () => ({ value: '/home/me' }))
+  on('env.get', ($, e) => ({ value: e.name === 'HOME' ? '/home/me' : e.name === 'ITERM_WORKGROUP_ID' ? o.workgroup : undefined }))
   on('fs.write', ($, e) => (w.files.set(e.path, e.text), { value: undefined }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: `${o.branch ?? 'feat/x'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('model.complete', ($, e) => {
@@ -149,6 +150,29 @@ describe('on by default', () => {
     await ended($)
     expect(w.forks).toEqual([])
     expect(row(w).status).toBe('off')
+  })
+
+  test('/drive off sticks through a reload, which runs session.start again', async ($, on) => {
+    const w = world(on, { fork: () => 'Keep going.' })
+    await start($)
+    await drive($, 'off')
+    await start($)
+    expect(await type($, 'add a line')).toBe('add a line')
+    await ended($)
+    expect(w.forks).toEqual([])
+    expect(row(w).status).toBe('off')
+  })
+
+  test("a session iTerm2 launched as a workgroup peer is iTerm's: its prompt goes as sent until /drive", async ($, on) => {
+    const w = world(on, { fork: () => 'Keep going.', workgroup: 'wg-1' })
+    await start($)
+    expect(await type($, 'Review the pending changes in this repo.')).toBe('Review the pending changes in this repo.')
+    await ended($)
+    expect(w.rewrites).toEqual([])
+    expect(w.forks).toEqual([])
+    expect(await drive($, 'on')).toBe('Autopilot on: the next prompt you type is its goal.')
+    expect(await type($, 'fix what it found')).toBe('fix what it found')
+    expect(row(w)).toMatchObject({ goal: 'fix what it found', status: 'driving' })
   })
 
   test('after Esc, a typed prompt drives the new goal', async ($, on) => {
